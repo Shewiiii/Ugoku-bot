@@ -49,11 +49,11 @@ async def download(
         if id:
             url = f'https://store.line.me/stickershop/product/{id}'
         path = get_stickers(url)
-    await ctx.send(
-        file=discord.File(path),
-        content=(f"Sorry for the wait <@{ctx.author.id}> ! "
-                 "Here's the sticker pack you requested.")
-    )
+        await ctx.send(
+            file=discord.File(path),
+            content=(f"Sorry for the wait <@{ctx.author.id}> ! "
+                    "Here's the sticker pack you requested.")
+        )
 
 
 @bot.slash_command(name='test', description='A temp command to test things.')
