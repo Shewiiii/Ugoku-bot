@@ -4,7 +4,7 @@ import json
 def get_upload_size_limit(
     guild_id: int | str,
     path: str = 'config/settings.json',
-    default: int = 25
+    default: int = 25000000
 ):
     guild_id = str(guild_id)
     with open('config/settings.json', 'r') as json_file:
@@ -17,4 +17,4 @@ def get_upload_size_limit(
         with open('config/settings.json', 'w') as json_file:
             json.dump(settings, json_file)
         
-        return default
+    return default

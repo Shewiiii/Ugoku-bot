@@ -13,7 +13,7 @@ def canWrite(folder):
 def generateReplayGainString(trackGain):
     return "{0:.2f} dB".format((float(trackGain) + 18.4) * -1)
 
-def getBitrateNumberFromText(txt):
+def getBitrateNumberFromText(txt: str):
     txt = str(txt).lower()
     if txt in ['flac', 'lossless', '9']:
         return TrackFormats.FLAC

@@ -25,9 +25,7 @@ def get_link(string: str) -> Path:
     )[-1][0]
 
 
-def get_stickers(
-    link: str,
-) -> None:
+def get_stickerpack(link: str) -> str:
     '''Get every sticker on a LINE Store page.
 
     Args:
@@ -71,5 +69,5 @@ def get_stickers(
         logging.info(f'Downloaded: {link}')
 
     shutil.make_archive(archives_path / pack_name, 'zip', path)
-
+    
     return (archives_path / f'{pack_name}.zip').absolute()

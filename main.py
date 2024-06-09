@@ -2,7 +2,7 @@ import logging
 import os
 from dotenv import load_dotenv
 import discord
-from line import get_stickers
+from line import get_stickerpack
 from song_downloader import download
 import json
 from utils import *
@@ -11,7 +11,7 @@ logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s %(levelname)s %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
-    filename='logs.log',
+    filename='log.log',
 )
 
 load_dotenv()
@@ -46,14 +46,14 @@ async def get_stickers(
     url: int | None = None,
 ):
     if not id and not url:
-        await ctx.respond(f'Please specify an URL or a sticker pack ID.')
+        await ctx.respond(f'Please specify a URL or a sticker pack ID.')
     else:
         await ctx.respond(f'Give me a second!')
         if id:
             url = f'https://store.line.me/stickershop/product/{id}'
-        path = get_stickers(url)
+        zip_file = get_stickerpack(url)
         await ctx.send(
-            file=discord.File(path),
+            file=discord.File(zip_file),
             content=(f"Sorry for the wait <@{ctx.author.id}>! "
                      "Here's the sticker pack you requested.")
         )
@@ -78,7 +78,7 @@ async def get_stickers(
 async def get_songs(
     ctx: discord.ApplicationContext,
     url,
-    format: str = None,
+    format: str = 'mp3 320',
 ):
     await ctx.respond(f'Give me a second!')
     limit = get_upload_size_limit(ctx.guild.id)
@@ -92,6 +92,7 @@ async def get_songs(
         logging.info(f'File size: {size}, Path: {path}')
 
         if size >= limit:
+            await ctx.respond(f'size is {size} and the limit is {limit}')
             if format != 'MP3 320' and format != 'MP3 128':
                 format = 'MP3 320'
                 await ctx.respond('Track too heavy, trying to download with MP3 320...')
@@ -131,7 +132,7 @@ async def set_upload_limit(ctx: discord.ApplicationContext, size: int):
         settings = json.load(json_file)
 
     # Change value
-    settings['uploadSizeLimit'][str(ctx.guild.id)] = size
+    settings['uploadSizeLimit'][str(ctx.guild.id)] = size*10**6
 
     # Write new data
     with open('config/settings.json', 'w') as json_file:
@@ -146,5 +147,9 @@ async def set_upload_limit(ctx: discord.ApplicationContext, size: int):
 async def test(ctx: discord.ApplicationContext):
     await ctx.respond(f'{ctx.guild.id}, {type(ctx.guild.id)}')
 
+# @bot.slash_command(
+#     name='set_default_format',
+#     description='Set ',
+# )
 
 bot.run(TOKEN)

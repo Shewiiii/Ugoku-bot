@@ -4,6 +4,7 @@ import os
 from os import listdir
 from os.path import isfile, join
 from datetime import datetime
+import json
 
 from concurrent.futures import ThreadPoolExecutor
 from deezer import Deezer
@@ -26,22 +27,17 @@ class LogListener:
     @classmethod
     def send(cls, key, value=None):
         logString = formatListener(key, value)
-        # if logString:
-        # print(logString)
+        if logString:
+            print(logString)
 
 
 load_dotenv()
 ARL = os.getenv('DEEZER_ARL')
 
 
-def get_format(bitrate: int | str,
-               settings,
-               ):
-    # Available: (MP3) '128', '320, 'flac'/'lossless'
-    if bitrate:
-        bitrate = getBitrateNumberFromText(str(bitrate))
-    else:
-        bitrate = getBitrateNumberFromText(settings.get("maxBitrate"))
+def get_format(
+    bitrate: int | str,
+):
 
     if bitrate == TrackFormats.FLAC:
         format_ = 'flac'
@@ -51,52 +47,83 @@ def get_format(bitrate: int | str,
     return format_
 
 
+def get_account_country(path: str = 'config/settings.json'):
+    with open(path, 'r') as json_file:
+        settings = json.load(json_file)
+
+    return settings['country']
+
+
+def get_downloadObjects(
+    url: str | list,
+    dz: Deezer,
+    bitrate: str,
+    plugins: dict,
+    listener: LogListener,
+) -> list:
+    links = []
+    for link in url:
+        if ';' in link:
+            for l in link.split(";"):
+                links.append(l)
+        else:
+            links.append(link)
+    print(links)
+
+    downloadObjects = []
+
+    for link in links:
+        try:
+            downloadObject = generateDownloadObject(
+                dz, link, bitrate, plugins, listener)
+        except GenerationError as e:
+            print(f"{e.link}: {e.message}")
+            continue
+        if isinstance(downloadObject, list):
+            downloadObjects += downloadObject
+        else:
+            downloadObjects.append(downloadObject)
+
+    return downloadObjects
+
+
 def download(
     url: str,
-    bitrate: int | str | None = None,
+    bitrate: str = 'mp3 320',
 ) -> dict:
     # Check for local configFolder
     localpath = Path('.')
     configFolder = localpath / 'config'
 
+    # Load deezer
     dz = Deezer()
     listener = LogListener()
-
-    dz.login_via_arl(ARL)
-
     plugins = {
         "spotify": Spotify(configFolder=configFolder)
     }
     plugins["spotify"].setup()
+    
+    # Load account
+    dz.login_via_arl(ARL)
+    country = get_account_country()
 
-    # Get format with bitrate
+    # Init setteings, format and bitrate
     settings = loadSettings(configFolder)
-    format_ = get_format(bitrate, settings)
+    bitrate = getBitrateNumberFromText(str(bitrate))
+    format_ = get_format(bitrate)
 
-    def downloadLinks(url, format_: str, bitrate=None):
-        links = []
-        for link in url:
-            if ';' in link:
-                for l in link.split(";"):
-                    links.append(l)
-            else:
-                links.append(link)
-        print(links)
+    # Init objects
+    url = [url]
+    downloadObjects = get_downloadObjects(
+        url=url,
+        dz=dz,
+        bitrate=bitrate,
+        plugins=plugins,
+        listener=listener,
+    )
+    warnings = []
 
-        downloadObjects = []
-
-        for link in links:
-            try:
-                downloadObject = generateDownloadObject(
-                    dz, link, bitrate, plugins, listener)
-            except GenerationError as e:
-                print(f"{e.link}: {e.message}")
-                continue
-            if isinstance(downloadObject, list):
-                downloadObjects += downloadObject
-            else:
-                downloadObjects.append(downloadObject)
-
+    def downloadLinks(url, format_: str, downloadObjects: list):
         final_paths = []
         for i, obj in enumerate(downloadObjects):
             # Create Track object to get final path
@@ -124,7 +151,8 @@ def download(
             )
 
             path = generatePath(track, obj, settings)
-            if isinstance(obj, Single):
+            if (isinstance(obj, Single)
+                    and country in trackAPI['available_countries']):
                 final_path = Path(
                     f'{path[-1]}/{path[0]}.{format_}'
                 )
@@ -138,9 +166,8 @@ def download(
                     final_paths.append((albumAPI, final_path))
 
             Downloader(dz, obj, settings, listener).start()
-        return final_paths
 
-    url = [url]
+        return final_paths
 
     # If first url is filepath readfile and use them as URLs
     try:
@@ -152,7 +179,7 @@ def download(
         with open(filename, encoding="utf-8") as f:
             url = f.readlines()
 
-    final_paths = downloadLinks(url, format_, bitrate)
+    final_paths = downloadLinks(url, format_, downloadObjects)
 
     # [0][0]: API, [0][1]: Path
     # ultra spaghetti, recursion would be much cleaner...
@@ -202,7 +229,7 @@ def download(
 
             # Case 1.1.2: One of the thing is a song
             else:
-                if format_ in path:
+                if format_ in str(path):
                     zip_file.write(path)
 
         zip_file.close()
