@@ -26,12 +26,29 @@ class LogListener:
     @classmethod
     def send(cls, key, value=None):
         logString = formatListener(key, value)
-        if logString:
-            print(logString)
+        # if logString:
+        # print(logString)
 
 
 load_dotenv()
 ARL = os.getenv('DEEZER_ARL')
+
+
+def get_format(bitrate: int | str,
+               settings,
+               ):
+    # Available: (MP3) '128', '320, 'flac'/'lossless'
+    if bitrate:
+        bitrate = getBitrateNumberFromText(str(bitrate))
+    else:
+        bitrate = getBitrateNumberFromText(settings.get("maxBitrate"))
+
+    if bitrate == TrackFormats.FLAC:
+        format_ = 'flac'
+    else:
+        format_ = 'mp3'
+
+    return format_
 
 
 def download(
@@ -42,7 +59,6 @@ def download(
     localpath = Path('.')
     configFolder = localpath / 'config'
 
-    settings = loadSettings(configFolder)
     dz = Deezer()
     listener = LogListener()
 
@@ -53,18 +69,11 @@ def download(
     }
     plugins["spotify"].setup()
 
-    def downloadLinks(url, bitrate=None):
-        # Available: (MP3) '128', '320, 'flac'/'lossless'
-        if bitrate:
-            bitrate = getBitrateNumberFromText(str(bitrate))
-        else:
-            bitrate =  getBitrateNumberFromText(settings.get("maxBitrate"))
+    # Get format with bitrate
+    settings = loadSettings(configFolder)
+    format_ = get_format(bitrate, settings)
 
-        if bitrate == TrackFormats.FLAC:
-            format = 'flac'
-        else:
-            format = 'mp3'
-
+    def downloadLinks(url, format_: str, bitrate=None):
         links = []
         for link in url:
             if ';' in link:
@@ -113,12 +122,11 @@ def download(
                 albumAPI=albumAPI,
                 playlistAPI=playlistAPI,
             )
-            print(playlistAPI)
 
             path = generatePath(track, obj, settings)
             if isinstance(obj, Single):
                 final_path = Path(
-                    f'{path[-1]}/{path[0]}.{format}'
+                    f'{path[-1]}/{path[0]}.{format_}'
                 )
                 final_paths.append((trackAPI, final_path))
 
@@ -144,7 +152,7 @@ def download(
         with open(filename, encoding="utf-8") as f:
             url = f.readlines()
 
-    final_paths = downloadLinks(url, bitrate)
+    final_paths = downloadLinks(url, format_, bitrate)
 
     # [0][0]: API, [0][1]: Path
     # ultra spaghetti, recursion would be much cleaner...
@@ -167,12 +175,16 @@ def download(
             real_final = ("./output/archives/songs/"
                           f"Compilation {ts}.zip")
 
+        # Delete the old zip if exists
+        if os.path.isfile(real_final):
+            os.remove(real_final)
+
         # Init the zip file
         zip_file = ZipFile(real_final, mode='w')
 
         # Add files associated to each path
         for api, path in final_paths:
-
+            print(path)
             # Case 1.1.1: One of the thing is a folder
             if path.is_dir():
 
@@ -182,13 +194,16 @@ def download(
                     if (path / thing).is_dir():
                         files = listdir(path / thing)
                         for file in files:
-                            zip_file.write(path / thing / file)
+                            if format_ in file:
+                                zip_file.write(path / thing / file)
                     else:
-                        zip_file.write(path / thing)
+                        if format_ in thing:
+                            zip_file.write(path / thing)
 
             # Case 1.1.2: One of the thing is a song
             else:
-                zip_file.write(path)
+                if format_ in path:
+                    zip_file.write(path)
 
         zip_file.close()
         return {'api': final_paths[0][0], 'path': real_final}
