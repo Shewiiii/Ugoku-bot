@@ -151,7 +151,9 @@ def download(
     real_final = ''
     path_count = len(final_paths)
     # Case 1: It's not a song
-    if path_count > 1 or final_paths[0][1].is_dir():
+    if path_count == 0:
+        return {}
+    elif path_count > 1 or final_paths[0][1].is_dir():
 
         # Case 1.1: There is only one folder
         if path_count == 1:

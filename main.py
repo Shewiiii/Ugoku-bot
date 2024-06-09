@@ -70,25 +70,46 @@ async def get_stickers(
     'format',
     type=discord.SlashCommandOptionType.string,
     description='The format of the files you want to save.',
-    autocomplete=discord.utils.basic_autocomplete(['FLAC','MP3 320', 'MP3 128']),
+    autocomplete=discord.utils.basic_autocomplete(
+        ['FLAC', 'MP3 320', 'MP3 128']),
 )
 async def get_songs(
     ctx: discord.ApplicationContext,
     url,
     format: str = None,
-):  
+):
     await ctx.respond(f'Give me a second !')
     try:
         results = download(url, bitrate=format)
+        if not results:
+            await ctx.respond('Track not found on deezer !')
+            return
         path = results['path']
+        size = os.path.getsize(path)
+
+        if size >= 25000000:
+            if format != 'MP3 320' and format != 'MP3 128':
+                format = 'MP3 320'
+                await ctx.respond('Track too heavy, trying to download with MP3 320...')
+                results = download(url, bitrate=format)
+                path = results['path']
+                size = os.path.getsize(path)
+                if size >= 25000000:
+                    await ctx.respond('Track too heavy ￣へ￣')
+                    return
+            else:
+                await ctx.respond('Track too heavy ￣へ￣')
+                return
+        # SUCESS:
         await ctx.send(
             file=discord.File(path),
             content=(f"Sorry for the wait <@{ctx.author.id}> ! "
-                     "Here's the song(s) you requested. Enjoy \\(￣︶￣*\\))")
+                     "Here's the song(s) you requested. Enjoy (￣︶￣*))")
         )
     except Exception as e:
         await ctx.respond(f'Oh no ! Something went wrong, {e}')
-        
+
+
 @bot.slash_command(name='test', description='A temp command to test things.')
 async def test(ctx: discord.ApplicationContext):
     await ctx.respond(f'<@{ctx.author.id}>')
