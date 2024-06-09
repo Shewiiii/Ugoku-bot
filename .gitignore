@@ -7,3 +7,4 @@ config/spotify/cache.json
 config/spotify/config.json
 config/queue
 config/logs
+config/spotify/.auth-cache

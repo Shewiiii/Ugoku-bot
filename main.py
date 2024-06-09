@@ -84,10 +84,10 @@ async def get_songs(
         await ctx.send(
             file=discord.File(path),
             content=(f"Sorry for the wait <@{ctx.author.id}> ! "
-                     "Here's the song(s) you requested. Enjoy ヾ(≧▽≦*)o")
+                     "Here's the song(s) you requested. Enjoy \\(￣︶￣*\\))")
         )
-    except:
-        await ctx.respond(f'Oh no ! Something went wrong ><')
+    except Exception as e:
+        await ctx.respond(f'Oh no ! Something went wrong, {e}')
         
 @bot.slash_command(name='test', description='A temp command to test things.')
 async def test(ctx: discord.ApplicationContext):

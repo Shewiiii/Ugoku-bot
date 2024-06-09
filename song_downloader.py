@@ -58,7 +58,7 @@ def download(
         if bitrate:
             bitrate = getBitrateNumberFromText(str(bitrate))
         else:
-            bitrate = settings.get("maxBitrate", TrackFormats.FLAC)
+            bitrate =  getBitrateNumberFromText(settings.get("maxBitrate"))
 
         if bitrate == TrackFormats.FLAC:
             format = 'flac'
@@ -145,7 +145,6 @@ def download(
             url = f.readlines()
 
     final_paths = downloadLinks(url, bitrate)
-    print(final_paths)
 
     # [0][0]: API, [0][1]: Path
     # ultra spaghetti, recursion would be much cleaner...
@@ -178,18 +177,15 @@ def download(
                 things = listdir(path)
                 # Checking sub repos
                 for thing in things:
-                    print(path / thing)
                     if (path / thing).is_dir():
                         files = listdir(path / thing)
                         for file in files:
                             zip_file.write(path / thing / file)
-                            print(path / thing / file)
                     else:
                         zip_file.write(path / thing)
 
             # Case 1.1.2: One of the thing is a song
             else:
-                print('fenrjignr', path)
                 zip_file.write(path)
 
         zip_file.close()
