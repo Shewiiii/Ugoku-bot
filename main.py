@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 import discord
 from line import get_stickers
+from song_downloader import download
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -24,7 +25,7 @@ async def ping(ctx):
 
 
 @bot.slash_command(
-    name='download',
+    name='get_stickers',
     description='Download a LINE sticker pack from a given URL or a sticker pack ID.'
 )
 @discord.option(
@@ -37,7 +38,7 @@ async def ping(ctx):
     type=discord.SlashCommandOptionType.integer,
     description='Sticker pack ID. Can be found in the url.'
 )
-async def download(
+async def get_stickers(
     ctx: discord.ApplicationContext,
     id: str | None = None,
     url: int | None = None,
@@ -52,10 +53,42 @@ async def download(
         await ctx.send(
             file=discord.File(path),
             content=(f"Sorry for the wait <@{ctx.author.id}> ! "
-                    "Here's the sticker pack you requested.")
+                     "Here's the sticker pack you requested.")
         )
 
 
+@bot.slash_command(
+    name='get_songs',
+    description='Download your favorite songs !'
+)
+@discord.option(
+    'url',
+    type=discord.SlashCommandOptionType.string,
+    description='Spotify/Deezer URL of a song, an album or a playlist. Separate urls with semi-colons.',
+)
+@discord.option(
+    'format',
+    type=discord.SlashCommandOptionType.string,
+    description='The format of the files you want to save.',
+    autocomplete=discord.utils.basic_autocomplete(['FLAC','MP3 320', 'MP3 128']),
+)
+async def get_songs(
+    ctx: discord.ApplicationContext,
+    url,
+    format: str = None,
+):  
+    await ctx.respond(f'Give me a second !')
+    try:
+        results = download(url, bitrate=format)
+        path = results['path']
+        await ctx.send(
+            file=discord.File(path),
+            content=(f"Sorry for the wait <@{ctx.author.id}> ! "
+                     "Here's the song(s) you requested. Enjoy ヾ(≧▽≦*)o")
+        )
+    except:
+        await ctx.respond(f'Oh no ! Something went wrong ><')
+        
 @bot.slash_command(name='test', description='A temp command to test things.')
 async def test(ctx: discord.ApplicationContext):
     await ctx.respond(f'<@{ctx.author.id}>')

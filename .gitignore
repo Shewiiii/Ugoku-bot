@@ -3,3 +3,7 @@
 __pycache__
 /output
 logs.log
+config/spotify/cache.json
+config/spotify/config.json
+config/queue
+config/logs

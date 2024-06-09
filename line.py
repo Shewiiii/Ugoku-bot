@@ -51,9 +51,9 @@ def get_stickers(
         pack_name = pack_name.replace(c, ' ')
 
     # Setup the folders
-    path = Path(f"output/downloads/{pack_name}")
+    path = Path(f"output/stickers/{pack_name}")
     path.mkdir(parents=True, exist_ok=True)
-    archives_path = Path(f"output/archives")
+    archives_path = Path(f"output/archives/stickers")
     archives_path.mkdir(parents=True, exist_ok=True)
 
     stickers = raw.find_all(
