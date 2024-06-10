@@ -21,6 +21,7 @@ from deemix.types.DownloadObjects import Single, Collection
 from deemix.types.Track import Track
 from deemix.utils.pathtemplates import generatePath
 from zipfile import ZipFile
+from deezer.errors import WrongLicense
 
 
 class LogListener:
@@ -29,6 +30,16 @@ class LogListener:
         logString = formatListener(key, value)
         if logString:
             print(logString)
+
+# Exceptions:
+
+
+class InvalidARL(Exception):
+    pass
+
+
+class TrackNotFound(Exception):
+    pass
 
 
 load_dotenv()
@@ -89,8 +100,8 @@ def get_downloadObjects(
 
 def download(
     url: str,
-    bitrate: str = 'mp3 320',
-) -> dict:
+    brfm: str = 'mp3 320',
+) -> dict | bool:
     # Check for local configFolder
     localpath = Path('.')
     configFolder = localpath / 'config'
@@ -102,14 +113,16 @@ def download(
         "spotify": Spotify(configFolder=configFolder)
     }
     plugins["spotify"].setup()
-    
+
     # Load account
-    dz.login_via_arl(ARL)
+    if not dz.login_via_arl(ARL):
+        raise InvalidARL
     country = get_account_country()
 
     # Init setteings, format and bitrate
+    brfm = brfm.lower()
     settings = loadSettings(configFolder)
-    bitrate = getBitrateNumberFromText(str(bitrate))
+    bitrate = getBitrateNumberFromText(str(brfm))
     format_ = get_format(bitrate)
 
     # Init objects
@@ -121,7 +134,6 @@ def download(
         plugins=plugins,
         listener=listener,
     )
-    warnings = []
 
     def downloadLinks(url, format_: str, downloadObjects: list):
         final_paths = []
@@ -153,18 +165,22 @@ def download(
             path = generatePath(track, obj, settings)
             if (isinstance(obj, Single)
                     and country in trackAPI['available_countries']):
+                # Set the path according to the bitrate/format
                 final_path = Path(
-                    f'{path[-1]}/{path[0]}.{format_}'
+                    f'{path[-1]}/{brfm}/{path[0]}.{format_}'
                 )
                 final_paths.append((trackAPI, final_path))
 
             elif isinstance(obj, Collection):
-                final_path = Path(path[-1])
+                # Set the path according to the bitrate/format
+                final_path = Path(f'{brfm}/{path[-1]}')
                 if 'playlist' in url[i]:
                     final_paths.append((playlistAPI, final_path))
                 else:
                     final_paths.append((albumAPI, final_path))
-
+                    
+            # Set the path according to the bitrate/format
+            settings['downloadLocation'] = f'output/songs/{brfm}'
             Downloader(dz, obj, settings, listener).start()
 
         return final_paths
@@ -187,7 +203,7 @@ def download(
     path_count = len(final_paths)
     # Case 1: It's not a song
     if path_count == 0:
-        return {}
+        raise TrackNotFound
     elif path_count > 1 or final_paths[0][1].is_dir():
 
         # Case 1.1: There is only one folder

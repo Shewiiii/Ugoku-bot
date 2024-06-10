@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 import discord
 from line import get_stickerpack
-from song_downloader import download
+from song_downloader import *
 import json
 from settings import *
 
@@ -87,21 +87,27 @@ async def songs(
     if not format:
         format = get_setting('defaultMusicFormat', ctx.guild_id, 'MP3 320')
     try:
-        results = download(url, bitrate=format)
-        if not results:
-            await ctx.respond('Track not found on deezer!')
-            return
+        results = download(url, brfm=format)
         path = results['path']
+
+        # To check if the Deezer account is paid
+        ext = os.path.splitext(path)[1][1:]
+        if 'zip' != ext and ext not in format.lower():
+            raise InvalidARL
+
         size = os.path.getsize(path)
         logging.info(f'Chosen format: {format}')
         logging.info(f'File size: {size}, Path: {path}')
 
         if size >= limit:
-            await ctx.respond(f'size is {size} and the limit is {limit}')
             if format != 'MP3 320' and format != 'MP3 128':
-                format = 'MP3 320'
-                await ctx.respond('Track too heavy, trying to download with MP3 320...')
-                results = download(url, bitrate=format)
+
+                await ctx.respond(
+                    'Track too heavy, trying '
+                    'to download with MP3 320...'
+                )
+                results = download(url, brfm='MP3 320')
+
                 path = results['path']
                 size = os.path.getsize(path)
                 logging.info(f'File size: {size}, Path: {path}')
@@ -117,8 +123,10 @@ async def songs(
             content=(f"Sorry for the wait <@{ctx.author.id}>! "
                      "Here's the song(s) you requested. Enjoy (￣︶￣*))")
         )
-    except Exception as e:
-        await ctx.respond(f'Oh no! Something went wrong, {e}')
+    except InvalidARL:
+        await ctx.respond(f'The deezer ARL is not valid. Please contact de developer.')
+    except TrackNotFound:
+        await ctx.respond(f'Track not found on Deezer!')
 
 
 set = bot.create_group("set", "Change bot settings")
