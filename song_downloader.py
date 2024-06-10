@@ -197,14 +197,15 @@ def download(
                 if 'playlist' in links[i]:
                     final_paths.append((
                         playlistAPI,
-                        Path(f'{settings['downloadLocation']
-                                }/{playlistAPI['title']}'),
+                        Path(f"{settings['downloadLocation']}"
+                             f"/{playlistAPI['title']}"),
                     ))
                 else:
                     final_paths.append((
                         albumAPI,
-                        Path(f"{settings['downloadLocation']}/{
-                             albumAPI['contributors'][0]['name']} - {albumAPI['title']}"),
+                        Path(f"{settings['downloadLocation']}/"
+                             f"{albumAPI['contributors'][0]['name']} - "
+                             f"{albumAPI['title']}"),
                     ))
 
             Downloader(dz, obj, settings, listener).start()
