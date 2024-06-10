@@ -5,13 +5,12 @@ import discord
 from line import get_stickerpack
 from song_downloader import download
 import json
-from utils import *
+from settings import *
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s %(levelname)s %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
-    filename='log.log',
 )
 
 load_dotenv()
@@ -22,12 +21,15 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 @bot.slash_command(name="ping", description='Test the reactivity of Ugoku!')
 async def ping(ctx):
     latency = round(bot.latency*1000, 2)
-    logging.debug(f'Pinged latency: {latency}')
+    logging.info(f'Pinged latency: {latency}')
     await ctx.respond(f'あわあわあわわわ! {latency}ms')
 
 
-@bot.slash_command(
-    name='get_stickers',
+get = bot.create_group("get", "Get stuff with Ugoku!")
+
+
+@get.command(
+    name='stickers',
     description='Download a LINE sticker pack from a given URL or a sticker pack ID.',
 )
 @discord.option(
@@ -40,7 +42,7 @@ async def ping(ctx):
     type=discord.SlashCommandOptionType.integer,
     description='Sticker pack ID. Can be found in the url.',
 )
-async def get_stickers(
+async def stickers(
     ctx: discord.ApplicationContext,
     id: str | None = None,
     url: int | None = None,
@@ -59,8 +61,8 @@ async def get_stickers(
         )
 
 
-@bot.slash_command(
-    name='get_songs',
+@get.command(
+    name='songs',
     description='Download your favorite songs!',
 )
 @discord.option(
@@ -75,13 +77,15 @@ async def get_stickers(
     autocomplete=discord.utils.basic_autocomplete(
         ['FLAC', 'MP3 320', 'MP3 128']),
 )
-async def get_songs(
+async def songs(
     ctx: discord.ApplicationContext,
     url,
-    format: str = 'mp3 320',
+    format: str | None = None,
 ):
     await ctx.respond(f'Give me a second!')
-    limit = get_upload_size_limit(ctx.guild.id)
+    limit = get_setting('uploadSizeLimit', ctx.guild_id, 25*10**6)
+    if not format:
+        format = get_setting('defaultMusicFormat', ctx.guild_id, 'MP3 320')
     try:
         results = download(url, bitrate=format)
         if not results:
@@ -89,6 +93,7 @@ async def get_songs(
             return
         path = results['path']
         size = os.path.getsize(path)
+        logging.info(f'Chosen format: {format}')
         logging.info(f'File size: {size}, Path: {path}')
 
         if size >= limit:
@@ -116,8 +121,11 @@ async def get_songs(
         await ctx.respond(f'Oh no! Something went wrong, {e}')
 
 
-@bot.slash_command(
-    name='set_upload_limit',
+set = bot.create_group("set", "Change bot settings")
+
+
+@set.command(
+    name='upload-limit',
     description='Change the upload limit (in MB)! It must not exceed server upload size limit. Default: 25MB.',
 )
 @discord.option(
@@ -126,30 +134,44 @@ async def get_songs(
     autocomplete=discord.utils.basic_autocomplete(
         [25, 50, 100]),
 )
-async def set_upload_limit(ctx: discord.ApplicationContext, size: int):
-    # Read json file
-    with open('config/settings.json', 'r') as json_file:
-        settings = json.load(json_file)
-
-    # Change value
-    settings['uploadSizeLimit'][str(ctx.guild.id)] = size*10**6
-
-    # Write new data
-    with open('config/settings.json', 'w') as json_file:
-        json.dump(settings, json_file)
-
-    await ctx.respond(
-        f'The upload size limit has been set to {size}MB for this server!'
+async def upload_limit(ctx: discord.ApplicationContext, size: int):
+    await change_settings(
+        ctx,
+        'uploadSizeLimit',
+        size*10**6,
+        f'The upload size limit has been set to {size}MB!'
     )
+
+
+@set.command(
+    name='default-music-format',
+    description='Change default music format.',
+)
+@discord.option(
+    'format',
+    type=discord.SlashCommandOptionType.string,
+    description='The format of the files you want to save.',
+    autocomplete=discord.utils.basic_autocomplete(
+        ['FLAC', 'MP3 320', 'MP3 128']),
+)
+async def default_music_format(
+    ctx: discord.ApplicationContext,
+    format: str
+):
+    if format not in ['FLAC', 'MP3 320', 'MP3 128']:
+        await ctx.respond('Please select a valid format !')
+    else:
+        await change_settings(
+            ctx,
+            'defaultMusicFormat',
+            format,
+            f'Default music format has been set to {format}!'
+        )
 
 
 @ bot.slash_command(name='test', description='A temp command to test things.')
 async def test(ctx: discord.ApplicationContext):
     await ctx.respond(f'{ctx.guild.id}, {type(ctx.guild.id)}')
 
-# @bot.slash_command(
-#     name='set_default_format',
-#     description='Set ',
-# )
 
 bot.run(TOKEN)
