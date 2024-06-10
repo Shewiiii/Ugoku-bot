@@ -126,8 +126,9 @@ set = bot.create_group("set", "Change bot settings")
 
 @set.command(
     name='upload-limit',
-    description='Change the upload limit (in MB)! It must not exceed server upload size limit. Default: 25MB.',
+    description='(Admin only) Change upload limit (in MB)! It must not exceed server upload size limit.',
 )
+@discord.ext.commands.has_permissions(administrator=True)
 @discord.option(
     'size',
     type=discord.SlashCommandOptionType.integer,
@@ -145,8 +146,9 @@ async def upload_limit(ctx: discord.ApplicationContext, size: int):
 
 @set.command(
     name='default-music-format',
-    description='Change default music format.',
+    description='(Admin only) Change default music format.',
 )
+@discord.ext.commands.has_permissions(administrator=True)
 @discord.option(
     'format',
     type=discord.SlashCommandOptionType.string,
