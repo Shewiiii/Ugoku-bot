@@ -131,6 +131,65 @@ def get_objects(
     return downloadObjects, links
 
 
+def downloadLinks(links, format_: str, downloadObjects: list):
+    final_paths = []
+    for i, obj in enumerate(downloadObjects):
+        # Create Track object to get final path
+        if obj.__type__ == "Convertable":
+            obj = plugins[obj.plugin].convert(
+                dz,
+                obj,
+                settings,
+                listener
+            )
+
+        if isinstance(obj, Single):
+            trackAPI = obj.single.get('trackAPI')
+            albumAPI = None
+            playlistAPI = None
+
+        elif isinstance(obj, Collection):
+            trackAPI = obj.collection['tracks'][0]
+            albumAPI = obj.collection.get('albumAPI')
+            playlistAPI = obj.collection.get('playlistAPI')
+
+        track = Track().parseData(
+            dz=dz,
+            track_id=trackAPI['id'],
+            trackAPI=trackAPI,
+            albumAPI=albumAPI,
+            playlistAPI=playlistAPI,
+        )
+
+        path = generatePath(track, obj, settings)
+
+        if isinstance(obj, Single):
+            # Set the path according to the bitrate/format
+            final_path = Path(
+                f'{path[-1]}/{path[0]}.{format_}'
+            )
+            final_paths.append((trackAPI, final_path))
+
+        elif isinstance(obj, Collection):
+            # Set the path according to the bitrate/format
+            if 'playlist' in links[i]:
+                final_paths.append((
+                    playlistAPI,
+                    Path(f"{settings['downloadLocation']}"
+                         f"/{playlistAPI['title']}"),
+                ))
+            else:
+                final_paths.append((
+                    albumAPI,
+                    Path(f"{settings['downloadLocation']}/"
+                         f"{albumAPI['contributors'][0]['name']} - "
+                         f"{albumAPI['title']}"),
+                ))
+
+        Downloader(dz, obj, settings, listener).start()
+    return final_paths
+
+
 def download(
     url: str,
     brfm: str = 'mp3 320',
@@ -152,64 +211,6 @@ def download(
 
     # Set the path according to the bitrate/format
     settings['downloadLocation'] = f'output/songs/{brfm}'
-
-    def downloadLinks(links, format_: str, downloadObjects: list):
-        final_paths = []
-        for i, obj in enumerate(downloadObjects):
-            # Create Track object to get final path
-            if obj.__type__ == "Convertable":
-                obj = plugins[obj.plugin].convert(
-                    dz,
-                    obj,
-                    settings,
-                    listener
-                )
-
-            if isinstance(obj, Single):
-                trackAPI = obj.single.get('trackAPI')
-                albumAPI = None
-                playlistAPI = None
-
-            elif isinstance(obj, Collection):
-                trackAPI = obj.collection['tracks'][0]
-                albumAPI = obj.collection.get('albumAPI')
-                playlistAPI = obj.collection.get('playlistAPI')
-
-            track = Track().parseData(
-                dz=dz,
-                track_id=trackAPI['id'],
-                trackAPI=trackAPI,
-                albumAPI=albumAPI,
-                playlistAPI=playlistAPI,
-            )
-
-            path = generatePath(track, obj, settings)
-
-            if isinstance(obj, Single):
-                # Set the path according to the bitrate/format
-                final_path = Path(
-                    f'{path[-1]}/{path[0]}.{format_}'
-                )
-                final_paths.append((trackAPI, final_path))
-
-            elif isinstance(obj, Collection):
-                # Set the path according to the bitrate/format
-                if 'playlist' in links[i]:
-                    final_paths.append((
-                        playlistAPI,
-                        Path(f"{settings['downloadLocation']}"
-                             f"/{playlistAPI['title']}"),
-                    ))
-                else:
-                    final_paths.append((
-                        albumAPI,
-                        Path(f"{settings['downloadLocation']}/"
-                             f"{albumAPI['contributors'][0]['name']} - "
-                             f"{albumAPI['title']}"),
-                    ))
-
-            Downloader(dz, obj, settings, listener).start()
-        return final_paths
 
     # If first url is filepath readfile and use them as URLs
     try:
