@@ -130,7 +130,7 @@ async def songs(
     print(ctx.author.id, ARL)
 
     if not format:
-        format = get_setting(ctx.guild_id, 'defaultMusicFormat', 'MP3 320')
+        format = get_setting(ctx.user.id, 'defaultMusicFormat', 'MP3 320')
     try:
         downloadObjects, links, format_ = init_dl(
             url=url,
