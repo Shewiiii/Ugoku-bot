@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 import discord
 from line import get_stickerpack
 from song_downloader import *
-import json
 from settings import *
 
 logging.basicConfig(
@@ -18,7 +17,7 @@ bot = discord.Bot()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
 
-@bot.slash_command(name="ping", description='Test the reactivity of Ugoku!')
+@bot.command(name="ping", description='Test the reactivity of Ugoku!')
 async def ping(ctx):
     latency = round(bot.latency*1000, 2)
     logging.info(f'Pinged latency: {latency}')
@@ -42,10 +41,28 @@ get = bot.create_group("get", "Get stuff with Ugoku!")
     type=discord.SlashCommandOptionType.integer,
     description='Sticker pack ID. Can be found in the url.',
 )
+@discord.option(
+    'gif',
+    type=discord.SlashCommandOptionType.boolean,
+    description=('Convert animated png to gifs, more widely supported. '
+                 'Default: True.'),
+    autocomplete=discord.utils.basic_autocomplete(
+        [True, False]),
+)
+@discord.option(
+    'loop',
+    type=discord.SlashCommandOptionType.string,
+    description=('Set how many times an animated sticker should be looped. '
+                 'Default: forever.'),
+    autocomplete=discord.utils.basic_autocomplete(
+        ['never', 'forever']),
+)
 async def stickers(
     ctx: discord.ApplicationContext,
     id: str | None = None,
     url: int | None = None,
+    gif: bool = True,
+    loop = 0,
 ):
     if not id and not url:
         await ctx.respond(f'Please specify a URL or a sticker pack ID.')
@@ -53,7 +70,7 @@ async def stickers(
         await ctx.respond(f'Give me a second!')
         if id:
             url = f'https://store.line.me/stickershop/product/{id}'
-        zip_file = get_stickerpack(url)
+        zip_file = get_stickerpack(url, gif=gif, loop=loop)
         await ctx.send(
             file=discord.File(zip_file),
             content=(f"Sorry for the wait <@{ctx.author.id}>! "
@@ -177,11 +194,6 @@ async def default_music_format(
             format,
             f'Default music format has been set to {format}!'
         )
-
-
-@ bot.slash_command(name='test', description='A temp command to test things.')
-async def test(ctx: discord.ApplicationContext):
-    await ctx.respond(f'{ctx.guild.id}, {type(ctx.guild.id)}')
 
 
 bot.run(TOKEN)

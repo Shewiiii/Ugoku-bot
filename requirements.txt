@@ -7,4 +7,4 @@ spotipy>=2.11.0
 py-cord
 requests
 bs4
-
+pillow

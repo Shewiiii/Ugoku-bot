@@ -4,6 +4,9 @@ import re
 from pathlib import Path
 import shutil
 import logging
+from PIL import Image
+import os
+
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -25,7 +28,11 @@ def get_link(string: str) -> Path:
     )[-1][0]
 
 
-def get_stickerpack(link: str) -> str:
+def get_stickerpack(
+    link: str,
+    gif: bool = True,
+    loop: int | str = 0,
+) -> str:
     '''Get every sticker on a LINE Store page.
 
     Args:
@@ -40,7 +47,11 @@ def get_stickerpack(link: str) -> str:
     # Setup
     request = requests.get(link)
     raw = BeautifulSoup(request.text, features="html.parser")
-
+    if loop == 'never':
+        loop = None
+    elif loop == 'forever':
+        loop = 0
+    
     # Pack name
     pack_name = raw.find('p', {'data-test': 'sticker-name-title'}).text
 
@@ -57,6 +68,10 @@ def get_stickerpack(link: str) -> str:
     stickers = raw.find_all(
         'li', {'class': 'FnStickerPreviewItem'}
     )
+
+    # Get sticker type
+    sticker_type = stickers[0]['class'][2]
+
     sticker_count = len(stickers)
     logging.info(f'Downloading {pack_name}, Sticker count: {sticker_count}')
 
@@ -65,9 +80,30 @@ def get_stickerpack(link: str) -> str:
         link = get_link(stickers[i]['data-preview'])
         image = requests.get(link).content
 
-        open(f'{path}\\{i+1}.png', 'wb').write(image)
+        png_file = open(f'{path}\\{i+1}.png', 'wb')
+        png_file.write(image)
+        png_file.close()
         logging.info(f'Downloaded: {link}')
 
+    # Convert apngs to gif if wanted and if there are
+    if (gif
+            and sticker_type in ['animation-sticker', 'popup-sticker']):
+        for i in range(sticker_count):
+            png_file = f'{path}\\{i+1}.png'
+            neko_arius = Image.open(png_file)
+            neko_arius.save(
+                f'{path}\\{i+1}.gif',
+                save_all=True,
+                append_images=[neko_arius],
+                loop=loop,
+                stroke_fill=0,
+                optimize=True,
+                disposal=2,
+            )
+
+            neko_arius.close()
+            os.remove(png_file)
+
     shutil.make_archive(archives_path / pack_name, 'zip', path)
-    
+
     return (archives_path / f'{pack_name}.zip').absolute()
