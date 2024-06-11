@@ -62,8 +62,18 @@ async def stickers(
     id: str | None = None,
     url: int | None = None,
     gif: bool = True,
-    loop = 0,
+    loop=0,
 ):
+    # --------Timer--------
+    t0 = datetime.now()
+
+    def timer(t) -> timedelta:
+        new = datetime.now()
+        delta = new - t
+        t = new
+        return f'{delta.seconds}.{str(delta.microseconds)[:2]}s', t
+    # --------------------
+
     if not id and not url:
         await ctx.respond(f'Please specify a URL or a sticker pack ID.')
     else:
@@ -76,6 +86,8 @@ async def stickers(
             content=(f"Sorry for the wait <@{ctx.author.id}>! "
                      "Here's the sticker pack you requested.")
         )
+        text, t = timer(t0)
+        await ctx.edit(content=f'Done ! {text}')
 
 
 @get.command(
@@ -99,12 +111,28 @@ async def songs(
     url,
     format: str | None = None,
 ):
+    # --------Timer--------
+    t0 = datetime.now()
+
+    def timer(t) -> timedelta:
+        new = datetime.now()
+        delta = new - t
+        t = new
+        return f'{delta.seconds}.{str(delta.microseconds)[:2]}s', t
+    # --------------------
+
     await ctx.respond(f'Give me a second!')
     limit = get_setting('uploadSizeLimit', ctx.guild_id, 25*10**6)
     if not format:
         format = get_setting('defaultMusicFormat', ctx.guild_id, 'MP3 320')
     try:
-        results = download(url, brfm=format)
+        downloadObjects, links, format_ = init_dl(url, brfm=format)
+        if not downloadObjects:
+            raise TrackNotFound
+
+        text, t = timer(t0)
+        await ctx.edit(content=f'Data fetched, {text}. Downloading...')
+        results = download(downloadObjects, links, format_)
         path = results['path']
 
         # To check if the Deezer account is paid
@@ -119,9 +147,9 @@ async def songs(
         if size >= limit:
             if format != 'MP3 320' and format != 'MP3 128':
 
-                await ctx.respond(
-                    'Track too heavy, trying '
-                    'to download with MP3 320...'
+                await ctx.edit(
+                    content='Track too heavy, trying '
+                            'to download with MP3 320...'
                 )
                 results = download(url, brfm='MP3 320')
 
@@ -129,21 +157,27 @@ async def songs(
                 size = os.path.getsize(path)
                 logging.info(f'File size: {size}, Path: {path}')
                 if size >= limit:
-                    await ctx.respond('Track too heavy ￣へ￣')
+                    await ctx.edit(content='Track too heavy ￣へ￣')
                     return
             else:
-                await ctx.respond('Track too heavy ￣へ￣')
+                await ctx.edit(content='Track too heavy ￣へ￣')
                 return
         # SUCESS:
+        text, t = timer(t)
+        await ctx.edit(content=f'Download finished, {text}. Uploading...')
         await ctx.send(
             file=discord.File(path),
             content=(f"Sorry for the wait <@{ctx.author.id}>! "
                      "Here's the song(s) you requested. Enjoy (￣︶￣*))")
         )
+        text, _ = timer(t0)
+        await ctx.edit(content=f'Done ! {text}')
+
     except InvalidARL:
-        await ctx.respond(f'The deezer ARL is not valid. Please contact de developer.')
+        await ctx.edit(content='The deezer ARL is not valid.'
+                       'Please contact de developer.')
     except TrackNotFound:
-        await ctx.respond(f'Track not found on Deezer!')
+        await ctx.edit(content='Track not found on Deezer!')
 
 
 set = bot.create_group("set", "Change bot settings")
@@ -195,5 +229,10 @@ async def default_music_format(
             f'Default music format has been set to {format}!'
         )
 
+
+@ bot.slash_command(name='test', description='A temp command to test things.')
+async def test(ctx: discord.ApplicationContext):
+    await ctx.respond(f'{ctx.guild.id}, {type(ctx.guild.id)}')
+    await ctx.edit(content='this is a test')
 
 bot.run(TOKEN)

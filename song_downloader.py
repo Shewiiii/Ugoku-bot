@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import os
 from os import listdir
 from os.path import isfile, join
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 
 from concurrent.futures import ThreadPoolExecutor
@@ -21,6 +21,8 @@ from deemix.types.DownloadObjects import Single, Collection
 from deemix.types.Track import Track
 from deemix.utils.pathtemplates import generatePath
 from zipfile import ZipFile
+
+import discord
 
 
 class LogListener:
@@ -190,14 +192,13 @@ def downloadLinks(links, format_: str, downloadObjects: list):
     return final_paths
 
 
-def download(
-    url: str,
-    brfm: str = 'mp3 320',
-) -> dict | bool:
-
-    brfm = brfm.lower()
+def init_dl(url: str, brfm: str = 'mp3 320') -> tuple[list, list]:
+    # Set the path according to the bitrate/format
+    settings['downloadLocation'] = f'output/songs/{brfm}'
     bitrate = getBitrateNumberFromText(str(brfm))
     format_ = get_format(bitrate)
+
+    brfm = brfm.lower()
 
     # Init objects
     url = [url]
@@ -209,20 +210,19 @@ def download(
         listener=listener,
     )
 
-    # Set the path according to the bitrate/format
-    settings['downloadLocation'] = f'output/songs/{brfm}'
+    return downloadObjects, links, format_
 
-    # If first url is filepath readfile and use them as URLs
-    try:
-        isfile = Path(url[0]).is_file()
-    except Exception:
-        isfile = False
-    if isfile:
-        filename = url[0]
-        with open(filename, encoding="utf-8") as f:
-            url = f.readlines()
 
-    final_paths = downloadLinks(links, format_, downloadObjects)
+def download(
+    downloadObjects: list, 
+    links: list, 
+    format_: str,
+) -> dict:
+    final_paths = downloadLinks(
+        links, 
+        format_, 
+        downloadObjects
+    )
 
     # [0][0]: API, [0][1]: Path
     real_final = ''
