@@ -47,6 +47,7 @@ class TrackNotFound(Exception):
 
 load_dotenv()
 ARL = os.getenv('DEEZER_ARL')
+
 # Check for local configFolder
 localpath = Path('.')
 configFolder = localpath / 'config'
@@ -60,12 +61,14 @@ plugins = {
 plugins["spotify"].setup()
 
 # Load account
-if not dz.login_via_arl(ARL):
-    raise InvalidARL
+dz.login_via_arl(ARL)
 # country = get_account_country()
 
 # Init setteings, format and bitrate
 settings = loadSettings(configFolder)
+
+# Init custom arl
+custom_arls = {}
 
 # ------------------------------------
 
@@ -133,7 +136,7 @@ def get_objects(
     return downloadObjects, links
 
 
-def downloadLinks(links, format_: str, downloadObjects: list):
+def download_links(dz, links, format_: str, downloadObjects: list):
     final_paths = []
     for i, obj in enumerate(downloadObjects):
         # Create Track object to get final path
@@ -192,7 +195,30 @@ def downloadLinks(links, format_: str, downloadObjects: list):
     return final_paths
 
 
-def init_dl(url: str, brfm: str = 'mp3 320') -> tuple[list, list]:
+def load_arl(user_id: int, arl: str) -> Deezer:
+    global custom_arls
+    global dz
+    if arl == ARL:
+        return dz
+    elif user_id in custom_arls:
+        return custom_arls[user_id]
+    else:
+        # New Deezer instance
+        new_dz = Deezer()
+        new_dz.login_via_arl(arl)
+        custom_arls[user_id] = new_dz
+        return new_dz
+
+
+def init_dl(
+    url: str,
+    guild_id: int,
+    brfm: str = 'mp3 320',
+    arl: str = ARL,
+) -> tuple[list, list]:
+    # Check if custom_arl
+    dz = load_arl(guild_id, arl)
+
     # Set the path according to the bitrate/format
     settings['downloadLocation'] = f'output/songs/{brfm}'
     bitrate = getBitrateNumberFromText(str(brfm))
@@ -214,14 +240,21 @@ def init_dl(url: str, brfm: str = 'mp3 320') -> tuple[list, list]:
 
 
 def download(
-    downloadObjects: list, 
-    links: list, 
+    downloadObjects: list,
+    links: list,
     format_: str,
+    guild_id: int,
+    arl: str = ARL,
 ) -> dict:
-    final_paths = downloadLinks(
-        links, 
-        format_, 
-        downloadObjects
+    # Check if custom_arl
+    dz = load_arl(guild_id, arl)
+
+    # Download all
+    final_paths = download_links(
+        dz,
+        links,
+        format_,
+        downloadObjects,
     )
 
     # [0][0]: API, [0][1]: Path

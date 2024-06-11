@@ -11,28 +11,25 @@ logging.basicConfig(
 
 
 async def change_settings(
-    ctx: discord.ApplicationContext,
+    guild_id: int,
     setting: str,
     value,
-    response: str,
     path: str = Constants.SETTINGS_PATH
 ) -> None:
     with open(path, 'r') as json_file:
         settings = json.load(json_file)
 
     # Change value
-    settings[setting][str(ctx.guild.id)] = value
+    settings[setting][str(guild_id)] = value
 
     # Write new data
     with open(path, 'w') as json_file:
         json.dump(settings, json_file)
 
-    await ctx.respond(response)
-
 
 def get_setting(
-    setting: int | str,
     guild_id: int | str,
+    setting: int | str,
     default: int | str,
     path: str = Constants.SETTINGS_PATH,
 ) -> str | int:

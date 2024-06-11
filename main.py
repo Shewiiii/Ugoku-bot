@@ -1,10 +1,12 @@
 import logging
 import os
+from discord.ui.item import Item
 from dotenv import load_dotenv
 import discord
 from line import get_stickerpack
 from song_downloader import *
 from settings import *
+from fetch_arls import *
 
 logging.basicConfig(
     level=logging.INFO,
@@ -15,6 +17,7 @@ logging.basicConfig(
 load_dotenv()
 bot = discord.Bot()
 TOKEN = os.getenv('DISCORD_TOKEN')
+ARL = os.getenv('DEEZER_ARL')
 
 
 @bot.command(name="ping", description='Test the reactivity of Ugoku!')
@@ -122,29 +125,43 @@ async def songs(
     # --------------------
 
     await ctx.respond(f'Give me a second!')
-    limit = get_setting('uploadSizeLimit', ctx.guild_id, 25*10**6)
+    arl = get_setting(ctx.author.id, 'publicArl', ARL)
+    print(ctx.author.id, arl)
+    print(ctx.author.id, ARL)
+
     if not format:
-        format = get_setting('defaultMusicFormat', ctx.guild_id, 'MP3 320')
+        format = get_setting(ctx.guild_id, 'defaultMusicFormat', 'MP3 320')
     try:
-        downloadObjects, links, format_ = init_dl(url, brfm=format)
+        downloadObjects, links, format_ = init_dl(
+            url=url,
+            guild_id=ctx.guild_id,
+            arl=arl,
+            brfm=format
+        )
         if not downloadObjects:
             raise TrackNotFound
 
         text, t = timer(t0)
         await ctx.edit(content=f'Data fetched, {text}. Downloading...')
-        results = download(downloadObjects, links, format_)
+        results = download(
+            downloadObjects,
+            links,
+            format_,
+            arl=arl,
+            guild_id=ctx.guild_id,
+        )
         path = results['path']
 
-        # To check if the Deezer account is paid
+        size = os.path.getsize(path)
         ext = os.path.splitext(path)[1][1:]
+        # To check if the Deezer account is paid (?)
         if 'zip' != ext and ext not in format.lower():
             raise InvalidARL
 
-        size = os.path.getsize(path)
         logging.info(f'Chosen format: {format}')
         logging.info(f'File size: {size}, Path: {path}')
 
-        if size >= limit:
+        if size >= ctx.guild.filesize_limit:
             if format != 'MP3 320' and format != 'MP3 128':
 
                 await ctx.edit(
@@ -156,7 +173,7 @@ async def songs(
                 path = results['path']
                 size = os.path.getsize(path)
                 logging.info(f'File size: {size}, Path: {path}')
-                if size >= limit:
+                if size >= ctx.guild.filesize_limit:
                     await ctx.edit(content='Track too heavy ￣へ￣')
                     return
             else:
@@ -174,8 +191,11 @@ async def songs(
         await ctx.edit(content=f'Done ! {text}')
 
     except InvalidARL:
-        await ctx.edit(content='The deezer ARL is not valid.'
-                       'Please contact de developer.')
+        await ctx.edit(content='The deezer ARL is not valid. '
+                       'Please contact the developer or use a custom ARL.')
+    except FileNotFoundError:
+        await ctx.edit(content='The deezer ARL is not valid. '
+                       'Please contact the developer or use a custom ARL.')
     except TrackNotFound:
         await ctx.edit(content='Track not found on Deezer!')
 
@@ -184,30 +204,9 @@ set = bot.create_group("set", "Change bot settings")
 
 
 @set.command(
-    name='upload-limit',
-    description='(Admin only) Change upload limit (in MB)! It must not exceed server upload size limit.',
-)
-@discord.ext.commands.has_permissions(administrator=True)
-@discord.option(
-    'size',
-    type=discord.SlashCommandOptionType.integer,
-    autocomplete=discord.utils.basic_autocomplete(
-        [25, 50, 100]),
-)
-async def upload_limit(ctx: discord.ApplicationContext, size: int):
-    await change_settings(
-        ctx,
-        'uploadSizeLimit',
-        size*10**6,
-        f'The upload size limit has been set to {size}MB!'
-    )
-
-
-@set.command(
     name='default-music-format',
-    description='(Admin only) Change default music format.',
+    description='Change your default music format.',
 )
-@discord.ext.commands.has_permissions(administrator=True)
 @discord.option(
     'format',
     type=discord.SlashCommandOptionType.string,
@@ -222,17 +221,53 @@ async def default_music_format(
     if format not in ['FLAC', 'MP3 320', 'MP3 128']:
         await ctx.respond('Please select a valid format !')
     else:
-        await change_settings(
-            ctx,
-            'defaultMusicFormat',
-            format,
-            f'Default music format has been set to {format}!'
+        await change_settings(ctx.author.id, 'defaultMusicFormat', format)
+        await ctx.respond(f'Your default music format has been set to {format}!')
+
+
+select = generate_select()
+
+
+class ArlCountries(discord.ui.View):
+    def __init__(
+        self,
+        *items: Item,
+        timeout: float | None = 180,
+        disable_on_timeout: bool = False,
+        author_id: int
+    ):
+        super().__init__(*items, timeout=timeout, disable_on_timeout=disable_on_timeout)
+        self.author_id = author_id
+
+    @discord.ui.select(
+        placeholder="Choose a country!",
+        min_values=1,
+        max_values=1,
+        options=select,
+    )
+    # the function called when the user is done selecting options
+    async def select_callback(self, select, interaction):
+        arl = get_arl(select.values[0])
+        await change_settings(self.author_id, 'publicArl', arl)
+        await interaction.response.send_message(
+            f'You are now using a Deezer ARL from {select.values[0]}!'
         )
 
 
-@ bot.slash_command(name='test', description='A temp command to test things.')
-async def test(ctx: discord.ApplicationContext):
-    await ctx.respond(f'{ctx.guild.id}, {type(ctx.guild.id)}')
-    await ctx.edit(content='this is a test')
+@set.command(
+    name='custom-arl',
+    description='Change your Deezer localization!'
+)
+async def custom_arl(ctx: discord.ApplicationContext):
+    await ctx.respond("Select a country.", view=ArlCountries(author_id=ctx.author.id))
+
+
+@set.command(
+    name='default-arl',
+    description='Change your Deezer localization!'
+)
+async def custom_arl(ctx: discord.ApplicationContext):
+    await change_settings(ctx.author.id, 'publicArl', ARL)
+    await ctx.respond("You are now using the default ARL!")
 
 bot.run(TOKEN)
