@@ -34,6 +34,7 @@ from deemix.errors import DownloadFailed, MD5NotFound, DownloadCanceled, Preferr
 import discord
 from datetime import datetime, timedelta
 from timer import Timer
+from exceptions import *
 
 logger = logging.getLogger('deemix')
 
@@ -236,6 +237,8 @@ class Downloader:
                     'trackAPI': self.downloadObject.single.get('trackAPI'),
                     'albumAPI': self.downloadObject.single.get('albumAPI')
                 }, ctx=self.ctx)
+                if 'error' in track:
+                    raise TrackNotFound
                 if track: self.afterDownloadSingle(track)
                 
                 all_data.append(info_dict)
@@ -248,8 +251,14 @@ class Downloader:
                         'albumAPI': self.downloadObject.collection.get('albumAPI'),
                         'playlistAPI': self.downloadObject.collection.get('playlistAPI')
                     }, ctx=self.ctx)
-                    
-                    all_data.append(info_dict)
+                    if 'error' in tracks[pos]:
+                        self.ctx.respond(
+                            f"Error with {tracks[pos]['data']['artist']} "
+                            f"{- tracks[pos]['data']['artist']}, "
+                            f"{tracks[pos]['error']['message']}"
+                        )
+                    else:
+                        all_data.append(info_dict)
                 self.afterDownloadCollection(tracks)
 
         if self.listener:
@@ -511,7 +520,8 @@ class Downloader:
         extraData, 
         ctx: discord.ApplicationContext | None=None, 
         track=None
-    ):
+    ):  
+        info_dict = {}
         trackAPI = extraData['trackAPI']
         # Temp metadata to generate logs
         itemData = {
@@ -530,7 +540,7 @@ class Downloader:
                     newTrack = self.dz.gw.get_track_with_fallback(track.fallbackID)
                     newTrack = map_track(newTrack)
                     track.parseEssentialData(newTrack)
-                    return self.downloadWrapper(extraData, track)
+                    return await self.downloadWrapper(extraData, track)
                 if len(track.albumsFallback) != 0 and self.settings['fallbackISRC']:
                     newAlbumID = track.albumsFallback.pop()
                     newAlbum = self.dz.gw.get_album_page(newAlbumID)
@@ -544,7 +554,7 @@ class Downloader:
                         newTrack = self.dz.gw.get_track_with_fallback(fallbackID)
                         newTrack = map_track(newTrack)
                         track.parseEssentialData(newTrack)
-                        return self.downloadWrapper(extraData, track)
+                        return await self.downloadWrapper(extraData, track)
                 if not track.searched and self.settings['fallbackSearch']:
                     self.warn(itemData, error.errid, 'search')
                     searchedId = self.dz.api.get_track_id_from_metadata(track.mainArtist.name, track.title, track.album.title)
@@ -554,7 +564,7 @@ class Downloader:
                         track.parseEssentialData(newTrack)
                         track.searched = True
                         self.log(itemData, "searchFallback")
-                        return self.downloadWrapper(extraData, track)
+                        return await self.downloadWrapper(extraData, track)
                 error.errid += "NoAlternative"
                 error.message = ErrorMessages[error.errid]
             result = {'error': {

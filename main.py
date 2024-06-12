@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import discord
 from line import get_stickerpack
 from song_downloader import *
+from exceptions import *
 from settings import *
 from fetch_arls import *
 from timer import Timer
@@ -124,7 +125,7 @@ async def songs(
             'MP3 320'
         )
     try:
-        downloadObjects, links, format_ = init_dl(
+        downloadObjects, format_ = init_dl(
             url=url,
             guild_id=ctx.guild_id,
             arl=arl,
@@ -140,9 +141,9 @@ async def songs(
         results = await download(
             downloadObjects,
             format_,
-            arl=arl,
-            ctx=ctx,
             guild_id=ctx.guild_id,
+            ctx=ctx,
+            arl=arl,
             timer=timer,
         )
         path = results['path']
@@ -163,7 +164,7 @@ async def songs(
                     content='Track too heavy, trying '
                             'to download with MP3 320...'
                 )
-                downloadObjects, links, format_ = init_dl(
+                downloadObjects, format_ = init_dl(
                     url=url,
                     guild_id=ctx.guild_id,
                     arl=arl,
@@ -171,11 +172,10 @@ async def songs(
                 )
                 results = await download(
                     downloadObjects,
-                    links,
                     format_,
-                    arl=arl,
-                    ctx=ctx,
                     guild_id=ctx.guild_id,
+                    ctx=ctx,
+                    arl=arl,
                     timer=timer,
                 )
 
@@ -204,7 +204,7 @@ async def songs(
         await ctx.edit(content='The Deezer ARL is not valid. '
                        'Please contact the developer or use a custom ARL.')
     except TrackNotFound:
-        await ctx.edit(content='Track not found on Deezer!')
+        await ctx.edit(content='Track not found on Deezer! Try using another ARL.')
 
 
 set = bot.create_group("set", "Change bot settings")

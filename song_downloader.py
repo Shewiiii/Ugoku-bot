@@ -25,6 +25,8 @@ from zipfile import ZipFile
 import discord
 from timer import Timer
 
+from exceptions import *
+
 
 class LogListener:
     @classmethod
@@ -32,17 +34,6 @@ class LogListener:
         logString = formatListener(key, value)
         if logString:
             print(logString)
-
-
-# Exceptions:
-
-
-class InvalidARL(Exception):
-    pass
-
-
-class TrackNotFound(Exception):
-    pass
 
 # ----------GLOBAL SETTINGS----------
 
@@ -114,7 +105,6 @@ def get_objects(
                 links.append(l)
         else:
             links.append(link)
-    print(links)
 
     downloadObjects = []
 
@@ -135,7 +125,7 @@ def get_objects(
         else:
             downloadObjects.append(downloadObject)
 
-    return downloadObjects, links
+    return downloadObjects
 
 
 def load_arl(user_id: int, arl: str) -> Deezer:
@@ -171,7 +161,7 @@ def init_dl(
 
     # Init objects
     url = [url]
-    downloadObjects, links = get_objects(
+    downloadObjects = get_objects(
         url=url,
         dz=dz,
         bitrate=bitrate,
@@ -179,7 +169,7 @@ def init_dl(
         listener=listener,
     )
 
-    return downloadObjects, links, format_
+    return downloadObjects, format_
 
 
 async def download_links(
@@ -198,15 +188,21 @@ async def download_links(
                 settings,
                 listener
             )
-
-        final_paths += await Downloader(
-            dz,
-            obj,
-            settings,
-            ctx,
-            listener,
-            timer
-        ).start()
+        try:
+            final_paths += await Downloader(
+                dz,
+                obj,
+                settings,
+                ctx,
+                listener,
+                timer
+            ).start()
+        except TrackNotFound:
+            if len(downloadObjects) > 1:
+                ctx.respond("A song could not be downloaded, "
+                            "try using a different ARL.")
+            else:
+                raise TrackNotFound
 
     return final_paths
 
