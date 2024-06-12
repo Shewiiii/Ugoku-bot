@@ -84,7 +84,7 @@ async def stickers(
             content=(f"Sorry for the wait <@{ctx.author.id}>! "
                      "Here's the sticker pack you requested.")
         )
-        await ctx.edit(content=f'Done ! {timer.round()}')
+        await ctx.edit(content=f'Done ! {timer.total()}')
 
 
 @get.command(
@@ -196,7 +196,7 @@ async def songs(
             content=(f"Sorry for the wait <@{ctx.author.id}>! "
                      "Here's the song(s) you requested. Enjoy (￣︶￣*))")
         )
-        await ctx.edit(content=f'Done ! {timer.round()}')
+        await ctx.edit(content=f'Done ! {timer.total()}')
 
     except InvalidARL:
         await ctx.edit(content='The Deezer ARL is not valid. '

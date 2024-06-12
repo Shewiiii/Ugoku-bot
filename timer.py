@@ -11,3 +11,8 @@ class Timer:
         delta = new - self.t
         self.t = new
         return f'{delta.seconds}.{str(delta.microseconds)[:2]}s'
+    
+    def total(self) -> str:
+        new = datetime.now()
+        total_delta = new - self.t0
+        return f'{total_delta.seconds}.{str(total_delta.microseconds)[:2]}s'
