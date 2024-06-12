@@ -31,6 +31,11 @@ from deemix.decryption import generateCryptedStreamURL, streamTrack
 from deemix.settings import OverwriteOption
 from deemix.errors import DownloadFailed, MD5NotFound, DownloadCanceled, PreferredBitrateNotFound, TrackNot360, AlbumDoesntExists, DownloadError, ErrorMessages
 
+
+import discord
+from datetime import datetime, timedelta
+from main import Timer
+
 logger = logging.getLogger('deemix')
 
 extensions = {
@@ -201,7 +206,15 @@ def getPreferredBitrate(dz, track, preferredBitrate, shouldFallback, feelingLuck
     return TrackFormats.DEFAULT
 
 class Downloader:
-    def __init__(self, dz, downloadObject, settings, listener=None):
+    def __init__(
+        self, 
+        dz, 
+        downloadObject, 
+        settings, 
+        ctx: discord.ApplicationContext,
+        listener=None,
+        timer: Timer | None=None,
+    ):
         self.dz = dz
         self.downloadObject = downloadObject
         self.settings = settings
@@ -210,24 +223,29 @@ class Downloader:
 
         self.playlistCoverName = None
         self.playlistURLs = []
-
-    def start(self):
+        
+        # The shit for discord
+        self.ctx = ctx
+        self.timer = timer
+    
+    
+    async def start(self):
         if not self.downloadObject.isCanceled:
             if isinstance(self.downloadObject, Single):
-                track = self.downloadWrapper({
+                track = await self.downloadWrapper({
                     'trackAPI': self.downloadObject.single.get('trackAPI'),
                     'albumAPI': self.downloadObject.single.get('albumAPI')
-                })
+                }, ctx=self.ctx)
                 if track: self.afterDownloadSingle(track)
             elif isinstance(self.downloadObject, Collection):
                 tracks = [None] * len(self.downloadObject.collection['tracks'])
                 with ThreadPoolExecutor(self.settings['queueConcurrency']) as executor:
                     for pos, track in enumerate(self.downloadObject.collection['tracks'], start=0):
-                        tracks[pos] = executor.submit(self.downloadWrapper, {
+                        tracks[pos] = executor.submit(await self.downloadWrapper, {
                             'trackAPI': track,
                             'albumAPI': self.downloadObject.collection.get('albumAPI'),
                             'playlistAPI': self.downloadObject.collection.get('playlistAPI')
-                        })
+                        }, ctx=self.ctx)
                 self.afterDownloadCollection(tracks)
 
         if self.listener:
@@ -245,7 +263,14 @@ class Downloader:
         if self.listener:
             self.listener.send('downloadWarn', {'uuid': self.downloadObject.uuid, 'data': data, 'state': state, 'solution': solution})
 
-    def download(self, extraData, track=None):
+    async def download(
+        self, 
+        extraData, 
+        ctx: discord.ApplicationContext | None = None, 
+        track=None,
+    ):
+        if ctx:
+            await ctx.respond(f'some shit idk for real {self.timer.round()}')
         returnData = {}
         trackAPI = extraData.get('trackAPI')
         albumAPI = extraData.get('albumAPI')
@@ -438,7 +463,7 @@ class Downloader:
                     self.downloadObject.removeTrackProgress(self.listener)
                     track.filesizes['FILESIZE_FLAC'] = "0"
                     track.filesizes['FILESIZE_FLAC_TESTED'] = True
-                    return self.download(extraData, track=track)
+                    return self.download(extraData, track=track, ctx=ctx)
             self.log(itemData, "tagged")
 
         if track.searched: returnData['searched'] = True
@@ -455,7 +480,12 @@ class Downloader:
         self.downloadObject.files.append(returnData)
         return returnData
 
-    def downloadWrapper(self, extraData, track=None):
+    async def downloadWrapper(
+        self, 
+        extraData, 
+        ctx: discord.ApplicationContext | None=None, 
+        track=None
+    ):
         trackAPI = extraData['trackAPI']
         # Temp metadata to generate logs
         itemData = {
@@ -465,7 +495,7 @@ class Downloader:
         }
 
         try:
-            result = self.download(extraData, track)
+            result = await self.download(extraData, ctx, track)
         except DownloadFailed as error:
             if error.track:
                 track = error.track

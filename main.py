@@ -14,6 +14,19 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S',
 )
 
+
+class Timer:
+    def __init__(self) -> None:
+        self.t0 = datetime.now()
+        self.t = self.t0
+
+    def round(self) -> str:
+        new = datetime.now()
+        delta = new - self.t
+        self.t = new
+        return f'{delta.seconds}.{str(delta.microseconds)[:2]}s'
+
+
 load_dotenv()
 bot = discord.Bot()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -67,15 +80,7 @@ async def stickers(
     gif: bool = True,
     loop=0,
 ):
-    # --------Timer--------
-    t0 = datetime.now()
-
-    def timer(t) -> timedelta:
-        new = datetime.now()
-        delta = new - t
-        t = new
-        return f'{delta.seconds}.{str(delta.microseconds)[:2]}s', t
-    # --------------------
+    timer = Timer()
 
     if not id and not url:
         await ctx.respond(f'Please specify a URL or a sticker pack ID.')
@@ -89,8 +94,7 @@ async def stickers(
             content=(f"Sorry for the wait <@{ctx.author.id}>! "
                      "Here's the sticker pack you requested.")
         )
-        text, t = timer(t0)
-        await ctx.edit(content=f'Done ! {text}')
+        await ctx.edit(content=f'Done ! {timer.round()}')
 
 
 @get.command(
@@ -114,20 +118,10 @@ async def songs(
     url,
     format: str | None = None,
 ):
-    # --------Timer--------
-    t0 = datetime.now()
-
-    def timer(t) -> timedelta:
-        new = datetime.now()
-        delta = new - t
-        t = new
-        return f'{delta.seconds}.{str(delta.microseconds)[:2]}s', t
-    # --------------------
+    timer = Timer()
 
     await ctx.respond(f'Give me a second!')
     arl = get_setting(ctx.author.id, 'publicArl', ARL)
-    print(ctx.author.id, arl)
-    print(ctx.author.id, ARL)
 
     if not format:
         format = get_setting(ctx.user.id, 'defaultMusicFormat', 'MP3 320')
@@ -141,14 +135,18 @@ async def songs(
         if not downloadObjects:
             raise TrackNotFound
 
-        text, t = timer(t0)
-        await ctx.edit(content=f'Data fetched, {text}. Downloading...')
-        results = download(
+        await ctx.edit(
+            content=f'Download objects got, {timer.round()}. '
+                    'Fetching track data...'
+        )
+        results = await download(
             downloadObjects,
             links,
             format_,
             arl=arl,
+            ctx=ctx,
             guild_id=ctx.guild_id,
+            timer=timer,
         )
         path = results['path']
 
@@ -168,7 +166,19 @@ async def songs(
                     content='Track too heavy, trying '
                             'to download with MP3 320...'
                 )
-                results = download(url, brfm='MP3 320')
+                downloadObjects, links, format_ = init_dl(
+                    url=url,
+                    guild_id=ctx.guild_id,
+                    arl=arl,
+                    brfm='mp3 320'
+                )
+                results = await download(
+                    downloadObjects,
+                    links,
+                    format_,
+                    arl=arl,
+                    guild_id=ctx.guild_id,
+                )
 
                 path = results['path']
                 size = os.path.getsize(path)
@@ -187,8 +197,7 @@ async def songs(
             content=(f"Sorry for the wait <@{ctx.author.id}>! "
                      "Here's the song(s) you requested. Enjoy (￣︶￣*))")
         )
-        text, _ = timer(t0)
-        await ctx.edit(content=f'Done ! {text}')
+        await ctx.edit(content=f'Done ! {timer.round()}')
 
     except InvalidARL:
         await ctx.edit(content='The deezer ARL is not valid. '
