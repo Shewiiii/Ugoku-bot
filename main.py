@@ -7,24 +7,14 @@ from line import get_stickerpack
 from song_downloader import *
 from settings import *
 from fetch_arls import *
+from timer import Timer
+
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s %(levelname)s %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
 )
-
-
-class Timer:
-    def __init__(self) -> None:
-        self.t0 = datetime.now()
-        self.t = self.t0
-
-    def round(self) -> str:
-        new = datetime.now()
-        delta = new - self.t
-        self.t = new
-        return f'{delta.seconds}.{str(delta.microseconds)[:2]}s'
 
 
 load_dotenv()
@@ -121,10 +111,18 @@ async def songs(
     timer = Timer()
 
     await ctx.respond(f'Give me a second!')
-    arl = get_setting(ctx.author.id, 'publicArl', ARL)
+    arl = get_setting(
+        ctx.author.id,
+        'publicArl',
+        ARL
+    )
 
     if not format:
-        format = get_setting(ctx.user.id, 'defaultMusicFormat', 'MP3 320')
+        format = get_setting(
+            ctx.user.id,
+            'defaultMusicFormat',
+            'MP3 320'
+        )
     try:
         downloadObjects, links, format_ = init_dl(
             url=url,
@@ -137,7 +135,7 @@ async def songs(
 
         await ctx.edit(
             content=f'Download objects got, {timer.round()}. '
-                    'Fetching track data...'
+            'Fetching track data...'
         )
         results = await download(
             downloadObjects,
@@ -177,6 +175,7 @@ async def songs(
                     links,
                     format_,
                     arl=arl,
+                    ctx=ctx,
                     guild_id=ctx.guild_id,
                 )
 
@@ -190,8 +189,7 @@ async def songs(
                 await ctx.edit(content='Track too heavy ￣へ￣')
                 return
         # SUCESS:
-        text, t = timer(t)
-        await ctx.edit(content=f'Download finished, {text}. Uploading...')
+        await ctx.edit(content=f'Download finished, {timer.round()}. Uploading...')
         await ctx.send(
             file=discord.File(path),
             content=(f"Sorry for the wait <@{ctx.author.id}>! "

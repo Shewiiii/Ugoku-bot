@@ -34,7 +34,7 @@ from deemix.errors import DownloadFailed, MD5NotFound, DownloadCanceled, Preferr
 
 import discord
 from datetime import datetime, timedelta
-from main import Timer
+from timer import Timer
 
 logger = logging.getLogger('deemix')
 
@@ -269,8 +269,6 @@ class Downloader:
         ctx: discord.ApplicationContext | None = None, 
         track=None,
     ):
-        if ctx:
-            await ctx.respond(f'some shit idk for real {self.timer.round()}')
         returnData = {}
         trackAPI = extraData.get('trackAPI')
         albumAPI = extraData.get('albumAPI')
@@ -307,7 +305,9 @@ class Downloader:
             'title': track.title,
             'artist': track.mainArtist.name
         }
-
+        if ctx:
+            await ctx.edit(content=f'Track object created, {self.timer.round()}...')
+    
         # Check if track not yet encoded
         if track.MD5 == '': raise DownloadFailed("notEncoded", track)
 
@@ -403,7 +403,10 @@ class Downloader:
                 track.playlist.bitrate = selectedFormat
                 track.playlist.dateString = track.playlist.date.format(self.settings['dateFormat'])
                 self.playlistCoverName = generateAlbumName(self.settings['coverImageTemplate'], track.playlist, self.settings, track.playlist)
-
+        
+        if ctx:
+            await ctx.edit(content=f'Track cover saved, {self.timer.round()}...')
+        
         # Save lyrics in lrc file
         if self.settings['syncedLyrics'] and track.lyrics.sync:
             if not (filepath / f"{filename}.lrc").is_file() or self.settings['overwriteFile'] in [OverwriteOption.OVERWRITE, OverwriteOption.ONLY_TAGS]:
@@ -463,9 +466,12 @@ class Downloader:
                     self.downloadObject.removeTrackProgress(self.listener)
                     track.filesizes['FILESIZE_FLAC'] = "0"
                     track.filesizes['FILESIZE_FLAC_TESTED'] = True
-                    return self.download(extraData, track=track, ctx=ctx)
+                    return self.download(extraData, ctx, track)
             self.log(itemData, "tagged")
-
+        
+        if ctx:
+            await ctx.edit(content=f'Tags added, {self.timer.round()}...')
+        
         if track.searched: returnData['searched'] = True
         self.downloadObject.downloaded += 1
         if self.listener: self.listener.send("updateQueue", {

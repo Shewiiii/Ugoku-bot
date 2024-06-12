@@ -23,7 +23,7 @@ from deemix.utils.pathtemplates import generatePath
 from zipfile import ZipFile
 
 import discord
-from main import Timer
+from timer import Timer
 
 class LogListener:
     @classmethod
