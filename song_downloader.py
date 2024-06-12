@@ -23,7 +23,7 @@ from deemix.utils.pathtemplates import generatePath
 from zipfile import ZipFile
 
 import discord
-
+from timer import Timer
 
 class LogListener:
     @classmethod
@@ -31,6 +31,7 @@ class LogListener:
         logString = formatListener(key, value)
         if logString:
             print(logString)
+
 
 # Exceptions:
 
@@ -136,8 +137,16 @@ def get_objects(
     return downloadObjects, links
 
 
-def download_links(dz, links, format_: str, downloadObjects: list):
+async def download_links(
+    dz: Deezer,
+    links: list,
+    format_: str,
+    downloadObjects: list,
+    ctx: discord.ApplicationContext,
+    timer: Timer | None=None,
+):
     final_paths = []
+    # All this is useless basically
     for i, obj in enumerate(downloadObjects):
         # Create Track object to get final path
         if obj.__type__ == "Convertable":
@@ -191,7 +200,7 @@ def download_links(dz, links, format_: str, downloadObjects: list):
                          f"{albumAPI['title']}"),
                 ))
 
-        Downloader(dz, obj, settings, listener).start()
+        await Downloader(dz, obj, settings, ctx, listener, timer).start()
     return final_paths
 
 
@@ -215,7 +224,7 @@ def init_dl(
     guild_id: int,
     brfm: str = 'mp3 320',
     arl: str = ARL,
-) -> tuple[list, list]:
+) -> tuple[list, list, str]:
     # Check if custom_arl
     dz = load_arl(guild_id, arl)
 
@@ -239,22 +248,26 @@ def init_dl(
     return downloadObjects, links, format_
 
 
-def download(
+async def download(
     downloadObjects: list,
     links: list,
     format_: str,
     guild_id: int,
+    ctx: discord.ApplicationContext,
     arl: str = ARL,
+    timer: Timer | None=None,
 ) -> dict:
     # Check if custom_arl
     dz = load_arl(guild_id, arl)
 
     # Download all
-    final_paths = download_links(
+    final_paths = await download_links(
         dz,
         links,
         format_,
         downloadObjects,
+        ctx=ctx,
+        timer=timer,
     )
 
     # [0][0]: API, [0][1]: Path

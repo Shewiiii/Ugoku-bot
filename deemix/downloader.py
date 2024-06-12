@@ -31,6 +31,11 @@ from deemix.decryption import generateCryptedStreamURL, streamTrack
 from deemix.settings import OverwriteOption
 from deemix.errors import DownloadFailed, MD5NotFound, DownloadCanceled, PreferredBitrateNotFound, TrackNot360, AlbumDoesntExists, DownloadError, ErrorMessages
 
+
+import discord
+from datetime import datetime, timedelta
+from timer import Timer
+
 logger = logging.getLogger('deemix')
 
 extensions = {
@@ -201,7 +206,15 @@ def getPreferredBitrate(dz, track, preferredBitrate, shouldFallback, feelingLuck
     return TrackFormats.DEFAULT
 
 class Downloader:
-    def __init__(self, dz, downloadObject, settings, listener=None):
+    def __init__(
+        self, 
+        dz, 
+        downloadObject, 
+        settings, 
+        ctx: discord.ApplicationContext,
+        listener=None,
+        timer: Timer | None=None,
+    ):
         self.dz = dz
         self.downloadObject = downloadObject
         self.settings = settings
@@ -210,24 +223,29 @@ class Downloader:
 
         self.playlistCoverName = None
         self.playlistURLs = []
-
-    def start(self):
+        
+        # The shit for discord
+        self.ctx = ctx
+        self.timer = timer
+    
+    
+    async def start(self):
         if not self.downloadObject.isCanceled:
             if isinstance(self.downloadObject, Single):
-                track = self.downloadWrapper({
+                track = await self.downloadWrapper({
                     'trackAPI': self.downloadObject.single.get('trackAPI'),
                     'albumAPI': self.downloadObject.single.get('albumAPI')
-                })
+                }, ctx=self.ctx)
                 if track: self.afterDownloadSingle(track)
             elif isinstance(self.downloadObject, Collection):
                 tracks = [None] * len(self.downloadObject.collection['tracks'])
-                with ThreadPoolExecutor(self.settings['queueConcurrency']) as executor:
-                    for pos, track in enumerate(self.downloadObject.collection['tracks'], start=0):
-                        tracks[pos] = executor.submit(self.downloadWrapper, {
-                            'trackAPI': track,
-                            'albumAPI': self.downloadObject.collection.get('albumAPI'),
-                            'playlistAPI': self.downloadObject.collection.get('playlistAPI')
-                        })
+                # with ThreadPoolExecutor(self.settings['queueConcurrency']) as executor:
+                for pos, track in enumerate(self.downloadObject.collection['tracks'], start=0):
+                    tracks[pos] = await self.downloadWrapper({
+                        'trackAPI': track,
+                        'albumAPI': self.downloadObject.collection.get('albumAPI'),
+                        'playlistAPI': self.downloadObject.collection.get('playlistAPI')
+                    }, ctx=self.ctx)
                 self.afterDownloadCollection(tracks)
 
         if self.listener:
@@ -245,7 +263,12 @@ class Downloader:
         if self.listener:
             self.listener.send('downloadWarn', {'uuid': self.downloadObject.uuid, 'data': data, 'state': state, 'solution': solution})
 
-    def download(self, extraData, track=None):
+    async def download(
+        self, 
+        extraData, 
+        ctx: discord.ApplicationContext | None = None, 
+        track=None,
+    ):
         returnData = {}
         trackAPI = extraData.get('trackAPI')
         albumAPI = extraData.get('albumAPI')
@@ -282,7 +305,9 @@ class Downloader:
             'title': track.title,
             'artist': track.mainArtist.name
         }
-
+        if ctx:
+            await ctx.edit(content=f'Track object created, {self.timer.round()}...')
+    
         # Check if track not yet encoded
         if track.MD5 == '': raise DownloadFailed("notEncoded", track)
 
@@ -378,7 +403,10 @@ class Downloader:
                 track.playlist.bitrate = selectedFormat
                 track.playlist.dateString = track.playlist.date.format(self.settings['dateFormat'])
                 self.playlistCoverName = generateAlbumName(self.settings['coverImageTemplate'], track.playlist, self.settings, track.playlist)
-
+        
+        if ctx:
+            await ctx.edit(content=f'Track cover saved, {self.timer.round()}...')
+        
         # Save lyrics in lrc file
         if self.settings['syncedLyrics'] and track.lyrics.sync:
             if not (filepath / f"{filename}.lrc").is_file() or self.settings['overwriteFile'] in [OverwriteOption.OVERWRITE, OverwriteOption.ONLY_TAGS]:
@@ -438,9 +466,12 @@ class Downloader:
                     self.downloadObject.removeTrackProgress(self.listener)
                     track.filesizes['FILESIZE_FLAC'] = "0"
                     track.filesizes['FILESIZE_FLAC_TESTED'] = True
-                    return self.download(extraData, track=track)
+                    return self.download(extraData, ctx, track)
             self.log(itemData, "tagged")
-
+        
+        if ctx:
+            await ctx.edit(content=f'Tags added, {self.timer.round()}...')
+        
         if track.searched: returnData['searched'] = True
         self.downloadObject.downloaded += 1
         if self.listener: self.listener.send("updateQueue", {
@@ -455,7 +486,12 @@ class Downloader:
         self.downloadObject.files.append(returnData)
         return returnData
 
-    def downloadWrapper(self, extraData, track=None):
+    async def downloadWrapper(
+        self, 
+        extraData, 
+        ctx: discord.ApplicationContext | None=None, 
+        track=None
+    ):
         trackAPI = extraData['trackAPI']
         # Temp metadata to generate logs
         itemData = {
@@ -465,7 +501,7 @@ class Downloader:
         }
 
         try:
-            result = self.download(extraData, track)
+            result = await self.download(extraData, ctx, track)
         except DownloadFailed as error:
             if error.track:
                 track = error.track
@@ -600,7 +636,7 @@ class Downloader:
         searched = ""
 
         for i, track in enumerate(tracks):
-            track = track.result()
+            # track = track.result()
             if not track: return # Check if item is cancelled
 
             # Log errors to file
