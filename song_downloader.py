@@ -25,6 +25,7 @@ from zipfile import ZipFile
 import discord
 from timer import Timer
 
+
 class LogListener:
     @classmethod
     def send(cls, key, value=None):
@@ -137,73 +138,6 @@ def get_objects(
     return downloadObjects, links
 
 
-async def download_links(
-    dz: Deezer,
-    links: list,
-    format_: str,
-    downloadObjects: list,
-    ctx: discord.ApplicationContext,
-    timer: Timer | None=None,
-):
-    final_paths = []
-    # All this is useless basically
-    for i, obj in enumerate(downloadObjects):
-        # Create Track object to get final path
-        if obj.__type__ == "Convertable":
-            obj = plugins[obj.plugin].convert(
-                dz,
-                obj,
-                settings,
-                listener
-            )
-
-        if isinstance(obj, Single):
-            trackAPI = obj.single.get('trackAPI')
-            albumAPI = None
-            playlistAPI = None
-
-        elif isinstance(obj, Collection):
-            trackAPI = obj.collection['tracks'][0]
-            albumAPI = obj.collection.get('albumAPI')
-            playlistAPI = obj.collection.get('playlistAPI')
-
-        track = Track().parseData(
-            dz=dz,
-            track_id=trackAPI['id'],
-            trackAPI=trackAPI,
-            albumAPI=albumAPI,
-            playlistAPI=playlistAPI,
-        )
-
-        path = generatePath(track, obj, settings)
-
-        if isinstance(obj, Single):
-            # Set the path according to the bitrate/format
-            final_path = Path(
-                f'{path[-1]}/{path[0]}.{format_}'
-            )
-            final_paths.append((trackAPI, final_path))
-
-        elif isinstance(obj, Collection):
-            # Set the path according to the bitrate/format
-            if 'playlist' in links[i]:
-                final_paths.append((
-                    playlistAPI,
-                    Path(f"{settings['downloadLocation']}"
-                         f"/{playlistAPI['title']}"),
-                ))
-            else:
-                final_paths.append((
-                    albumAPI,
-                    Path(f"{settings['downloadLocation']}/"
-                         f"{albumAPI['contributors'][0]['name']} - "
-                         f"{albumAPI['title']}"),
-                ))
-
-        await Downloader(dz, obj, settings, ctx, listener, timer).start()
-    return final_paths
-
-
 def load_arl(user_id: int, arl: str) -> Deezer:
     global custom_arls
     global dz
@@ -248,23 +182,49 @@ def init_dl(
     return downloadObjects, links, format_
 
 
+async def download_links(
+    dz: Deezer,
+    downloadObjects: list,
+    ctx: discord.ApplicationContext,
+    timer: Timer | None = None,
+):
+    final_paths = []
+    for obj in downloadObjects:
+        # Create Track object to get final path
+        if obj.__type__ == "Convertable":
+            obj = plugins[obj.plugin].convert(
+                dz,
+                obj,
+                settings,
+                listener
+            )
+
+        final_paths += await Downloader(
+            dz,
+            obj,
+            settings,
+            ctx,
+            listener,
+            timer
+        ).start()
+
+    return final_paths
+
+
 async def download(
     downloadObjects: list,
-    links: list,
     format_: str,
     guild_id: int,
     ctx: discord.ApplicationContext,
     arl: str = ARL,
-    timer: Timer | None=None,
+    timer: Timer | None = None,
 ) -> dict:
     # Check if custom_arl
     dz = load_arl(guild_id, arl)
 
     # Download all
-    final_paths = await download_links(
+    all_data = await download_links(
         dz,
-        links,
-        format_,
         downloadObjects,
         ctx=ctx,
         timer=timer,
@@ -272,16 +232,16 @@ async def download(
 
     # [0][0]: API, [0][1]: Path
     real_final = ''
-    path_count = len(final_paths)
-    # Case 1: It's not a song
+    path_count = len(all_data)
     if path_count == 0:
         raise TrackNotFound
-    elif path_count > 1 or final_paths[0][1].is_dir():
+    # Case 1: It's not a song
+    elif path_count > 1 or all_data[0]['path'].is_dir():
 
         # Case 1.1: There is only one folder
         if path_count == 1:
             real_final = ("./output/archives/songs/"
-                          f"{final_paths[0][0]['title']}.zip")
+                          f"{all_data[0]['title']}.zip")
 
         # Case 1.2: There is *not* only one folder
         else:
@@ -294,7 +254,10 @@ async def download(
         zip_file = ZipFile(real_final, mode='w')
 
         # Add files associated to each path
-        for api, path in final_paths:
+        for info_dict in all_data:
+            print(all_data)
+            print(info_dict)
+            path = info_dict['path']
             print('path:', path)
 
             # Case 1.1.1: One of the thing is a folder
@@ -306,7 +269,13 @@ async def download(
                     zip_file.write(path)
 
         zip_file.close()
-        return {'api': final_paths[0][0], 'path': real_final}
+        print('collection frfr')
+        print('collection frfr')
+        print('collection frfr')
+        return {'all_data': all_data, 'path': real_final}
     # Case 2: It's a song
     else:
-        return {'api': final_paths[0][0], 'path': final_paths[0][1]}
+        print('sing frfr')
+        print('sing frfr')
+        print('sing frfr')
+        return {'all_data': all_data, 'path': all_data[0]['path']}

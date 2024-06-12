@@ -139,7 +139,6 @@ async def songs(
         )
         results = await download(
             downloadObjects,
-            links,
             format_,
             arl=arl,
             ctx=ctx,

@@ -1,4 +1,3 @@
-from concurrent.futures import ThreadPoolExecutor
 from time import sleep
 import traceback
 
@@ -230,22 +229,27 @@ class Downloader:
     
     
     async def start(self):
+        all_data = []
         if not self.downloadObject.isCanceled:
             if isinstance(self.downloadObject, Single):
-                track = await self.downloadWrapper({
+                track, info_dict = await self.downloadWrapper({
                     'trackAPI': self.downloadObject.single.get('trackAPI'),
                     'albumAPI': self.downloadObject.single.get('albumAPI')
                 }, ctx=self.ctx)
                 if track: self.afterDownloadSingle(track)
+                
+                all_data.append(info_dict)
             elif isinstance(self.downloadObject, Collection):
                 tracks = [None] * len(self.downloadObject.collection['tracks'])
                 # with ThreadPoolExecutor(self.settings['queueConcurrency']) as executor:
                 for pos, track in enumerate(self.downloadObject.collection['tracks'], start=0):
-                    tracks[pos] = await self.downloadWrapper({
+                    tracks[pos], info_dict = await self.downloadWrapper({
                         'trackAPI': track,
                         'albumAPI': self.downloadObject.collection.get('albumAPI'),
                         'playlistAPI': self.downloadObject.collection.get('playlistAPI')
                     }, ctx=self.ctx)
+                    
+                    all_data.append(info_dict)
                 self.afterDownloadCollection(tracks)
 
         if self.listener:
@@ -255,6 +259,9 @@ class Downloader:
             else:
                 self.listener.send("finishDownload", self.downloadObject.uuid)
 
+        return all_data
+    
+    
     def log(self, data, state):
         if self.listener:
             self.listener.send('downloadInfo', {'uuid': self.downloadObject.uuid, 'data': data, 'state': state})
@@ -269,11 +276,13 @@ class Downloader:
         ctx: discord.ApplicationContext | None = None, 
         track=None,
     ):
+        
         returnData = {}
         trackAPI = extraData.get('trackAPI')
         albumAPI = extraData.get('albumAPI')
         playlistAPI = extraData.get('playlistAPI')
         trackAPI['size'] = self.downloadObject.size
+        
         if self.downloadObject.isCanceled: raise DownloadCanceled
         if int(trackAPI['id']) == 0: raise DownloadFailed("notOnDeezer")
 
@@ -338,12 +347,22 @@ class Downloader:
 
         # Generate filename and filepath from metadata
         (filename, filepath, artistPath, coverPath, extrasPath) = generatePath(track, self.downloadObject, self.settings)
-
+        
         # Make sure the filepath exists
         makedirs(filepath, exist_ok=True)
         extension = extensions[track.bitrate]
         writepath = filepath / f"{filename}{extension}"
-
+        
+        # Just to get the path for the bot
+        info_dict = {
+            'trackAPI': trackAPI,
+            'albumAPI': albumAPI,
+            'playlistAPI': playlistAPI,
+            'title': trackAPI['title'],
+            # Because that mf is a string lmao
+            'path': Path(writepath),
+        }
+        
         # Save extrasPath
         if extrasPath and not self.downloadObject.extrasPath: self.downloadObject.extrasPath = extrasPath
 
@@ -484,7 +503,8 @@ class Downloader:
         returnData['data'] = itemData
         returnData['path'] = str(writepath)
         self.downloadObject.files.append(returnData)
-        return returnData
+        
+        return returnData, info_dict
 
     async def downloadWrapper(
         self, 
@@ -501,7 +521,7 @@ class Downloader:
         }
 
         try:
-            result = await self.download(extraData, ctx, track)
+            result, info_dict = await self.download(extraData, ctx, track)
         except DownloadFailed as error:
             if error.track:
                 track = error.track
@@ -567,7 +587,7 @@ class Downloader:
                     'stack': error.get('stack'),
                     'type': error['type']
                 })
-        return result
+        return result, info_dict
 
     def afterDownloadErrorReport(self, position, error, itemData=None):
         if not itemData: itemData = {}
