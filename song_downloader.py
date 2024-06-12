@@ -146,6 +146,7 @@ async def download_links(
     timer: Timer | None=None,
 ):
     final_paths = []
+    # All this is useless basically
     for i, obj in enumerate(downloadObjects):
         # Create Track object to get final path
         if obj.__type__ == "Convertable":

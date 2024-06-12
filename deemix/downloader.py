@@ -239,13 +239,13 @@ class Downloader:
                 if track: self.afterDownloadSingle(track)
             elif isinstance(self.downloadObject, Collection):
                 tracks = [None] * len(self.downloadObject.collection['tracks'])
-                with ThreadPoolExecutor(self.settings['queueConcurrency']) as executor:
-                    for pos, track in enumerate(self.downloadObject.collection['tracks'], start=0):
-                        tracks[pos] = executor.submit(await self.downloadWrapper, {
-                            'trackAPI': track,
-                            'albumAPI': self.downloadObject.collection.get('albumAPI'),
-                            'playlistAPI': self.downloadObject.collection.get('playlistAPI')
-                        }, ctx=self.ctx)
+                # with ThreadPoolExecutor(self.settings['queueConcurrency']) as executor:
+                for pos, track in enumerate(self.downloadObject.collection['tracks'], start=0):
+                    tracks[pos] = await self.downloadWrapper({
+                        'trackAPI': track,
+                        'albumAPI': self.downloadObject.collection.get('albumAPI'),
+                        'playlistAPI': self.downloadObject.collection.get('playlistAPI')
+                    }, ctx=self.ctx)
                 self.afterDownloadCollection(tracks)
 
         if self.listener:
@@ -636,7 +636,7 @@ class Downloader:
         searched = ""
 
         for i, track in enumerate(tracks):
-            track = track.result()
+            # track = track.result()
             if not track: return # Check if item is cancelled
 
             # Log errors to file
