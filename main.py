@@ -177,6 +177,7 @@ async def songs(
                     arl=arl,
                     ctx=ctx,
                     guild_id=ctx.guild_id,
+                    timer=timer,
                 )
 
                 path = results['path']
@@ -198,10 +199,10 @@ async def songs(
         await ctx.edit(content=f'Done ! {timer.round()}')
 
     except InvalidARL:
-        await ctx.edit(content='The deezer ARL is not valid. '
+        await ctx.edit(content='The Deezer ARL is not valid. '
                        'Please contact the developer or use a custom ARL.')
     except FileNotFoundError:
-        await ctx.edit(content='The deezer ARL is not valid. '
+        await ctx.edit(content='The Deezer ARL is not valid. '
                        'Please contact the developer or use a custom ARL.')
     except TrackNotFound:
         await ctx.edit(content='Track not found on Deezer!')
