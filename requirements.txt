@@ -8,3 +8,4 @@ py-cord
 requests
 bs4
 pillow
+python-dotenv
