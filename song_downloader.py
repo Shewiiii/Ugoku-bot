@@ -255,8 +255,6 @@ async def download(
 
         # Add files associated to each path
         for info_dict in all_data:
-            print(all_data)
-            print(info_dict)
             path = info_dict['path']
             print('path:', path)
 
@@ -269,13 +267,7 @@ async def download(
                     zip_file.write(path)
 
         zip_file.close()
-        print('collection frfr')
-        print('collection frfr')
-        print('collection frfr')
         return {'all_data': all_data, 'path': real_final}
     # Case 2: It's a song
     else:
-        print('sing frfr')
-        print('sing frfr')
-        print('sing frfr')
         return {'all_data': all_data, 'path': all_data[0]['path']}
