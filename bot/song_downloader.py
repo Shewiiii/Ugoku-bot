@@ -45,6 +45,9 @@ ARL = os.getenv('DEEZER_ARL')
 localpath = Path('.')
 configFolder = localpath / 'config'
 
+# Init settings
+settings = loadSettings(configFolder)
+
 # Load deezer
 dz = Deezer()
 listener = LogListener()
@@ -56,9 +59,6 @@ plugins["spotify"].setup()
 # Load account
 dz.login_via_arl(ARL)
 # country = get_account_country()
-
-# Init setteings, format and bitrate
-settings = loadSettings(configFolder)
 
 # Init custom arl
 custom_arls = {}
@@ -148,12 +148,13 @@ def init_dl(
     guild_id: int,
     brfm: str = 'mp3 320',
     arl: str = ARL,
-) -> tuple[list, list, str]:
+    settings: dict = settings
+) -> tuple[list, str, Deezer]:
     # Check if custom_arl
     dz = load_arl(guild_id, arl)
 
     # Set the path according to the bitrate/format
-    settings['downloadLocation'] = f'output/songs/{brfm}'
+    settings['downloadLocation'] = f'{settings['downloadLocation']}/{brfm}'
     bitrate = getBitrateNumberFromText(str(brfm))
     format_ = get_format(bitrate)
 
@@ -168,19 +169,9 @@ def init_dl(
         plugins=plugins,
         listener=listener,
     )
+    converted_objs = []
 
-    return downloadObjects, format_
-
-
-async def download_links(
-    dz: Deezer,
-    downloadObjects: list,
-    ctx: discord.ApplicationContext,
-    timer: Timer | None = None,
-):
-    final_paths = []
     for obj in downloadObjects:
-        # Create Track object to get final path
         if obj.__type__ == "Convertable":
             obj = plugins[obj.plugin].convert(
                 dz,
@@ -188,8 +179,24 @@ async def download_links(
                 settings,
                 listener
             )
+        converted_objs.append(obj)
+
+
+    return converted_objs, format_
+
+
+async def download_links(
+    dz: Deezer,
+    downloadObjects: list,
+    ctx: discord.ApplicationContext | None = None,
+    timer: Timer | None = None,
+    settings: dict = settings
+) -> list:
+    all_data = []
+    for obj in downloadObjects:
+        # Create Track object to get final path
         try:
-            final_paths += await Downloader(
+            all_data += await Downloader(
                 dz,
                 obj,
                 settings,
@@ -198,13 +205,13 @@ async def download_links(
                 timer
             ).start()
         except TrackNotFound:
-            if len(downloadObjects) > 1:
+            if len(downloadObjects) > 1 and ctx:
                 ctx.respond("A song could not be downloaded, "
                             "try using a different ARL.")
             else:
                 raise TrackNotFound
 
-    return final_paths
+    return all_data
 
 
 async def download(

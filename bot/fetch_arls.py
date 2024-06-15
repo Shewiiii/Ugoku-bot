@@ -8,6 +8,15 @@ raw = BeautifulSoup(request.text, features="html.parser")
 url: str = 'https://rentry.org/firehawk52#deezer-arls'
 
 
+def simplified(country: str) -> str:
+    try:
+        # Japan/にっぽん to Japan
+        return country[:country.index('/')]
+    except:
+        # France
+        return country
+
+
 def get_rows():
     request = requests.get(url)
     raw = BeautifulSoup(request.text, features="html.parser")
@@ -25,31 +34,21 @@ def get_countries() -> list:
     countries = []
     for row in rows:
         country = row.find('img')['alt']
+        country = simplified(country)
         if country not in countries:
             countries.append(country)
 
     return countries
 
 
-def generate_select() -> list:
-    select = []
-    countries = get_countries()
-    for country in countries:
-        select.append(
-            discord.SelectOption(
-                label=country,
-                description=f'Songs from {country} should be available.'
-            )
-        )
-    return select[:25]
-
-
 def get_arl(country: str) -> str:
+    country = simplified(country)
     rows = get_rows()
     if country == 'Default ARL':
         return os.getenv('DEEZER_ARL')
     else:
         for row in rows:
             c = row.find('img')['alt']
+            c = simplified(c)
             if country == c:
                 return row.find('code').text

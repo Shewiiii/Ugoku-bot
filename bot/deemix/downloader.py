@@ -211,7 +211,7 @@ class Downloader:
         dz, 
         downloadObject, 
         settings, 
-        ctx: discord.ApplicationContext,
+        ctx: discord.ApplicationContext | None,
         listener=None,
         timer: Timer | None=None,
     ):
@@ -323,7 +323,7 @@ class Downloader:
             'title': track.title,
             'artist': track.mainArtist.name
         }
-        if ctx:
+        if ctx and self.timer:
             await ctx.edit(content=f'Track object created, {self.timer.round()}...')
     
         # Check if track not yet encoded
@@ -368,9 +368,11 @@ class Downloader:
             'albumAPI': albumAPI,
             'playlistAPI': playlistAPI,
             'title': trackAPI['title'],
+            'artist': trackAPI['contributors'][0]['name'],
             # Because that mf is a string lmao
             'path': Path(writepath),
         }
+        info_dict['display_name'] = f'{info_dict['artist']} - {info_dict['title']}'
         
         # Save extrasPath
         if extrasPath and not self.downloadObject.extrasPath: self.downloadObject.extrasPath = extrasPath
@@ -432,7 +434,7 @@ class Downloader:
                 track.playlist.dateString = track.playlist.date.format(self.settings['dateFormat'])
                 self.playlistCoverName = generateAlbumName(self.settings['coverImageTemplate'], track.playlist, self.settings, track.playlist)
         
-        if ctx:
+        if ctx and self.timer:
             await ctx.edit(content=f'Track cover saved, {self.timer.round()}...')
         
         # Save lyrics in lrc file
@@ -497,7 +499,7 @@ class Downloader:
                     return self.download(extraData, ctx, track)
             self.log(itemData, "tagged")
         
-        if ctx:
+        if ctx and self.timer:
             await ctx.edit(content=f'Tags added, {self.timer.round()}...')
         
         if track.searched: returnData['searched'] = True
