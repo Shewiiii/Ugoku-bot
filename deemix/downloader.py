@@ -32,9 +32,8 @@ from deemix.errors import DownloadFailed, MD5NotFound, DownloadCanceled, Preferr
 
 
 import discord
-from datetime import datetime, timedelta
-from timer import Timer
-from exceptions import *
+from bot.timer import Timer
+from deemix.exceptions import *
 
 logger = logging.getLogger('deemix')
 
@@ -372,7 +371,7 @@ class Downloader:
             # Because that mf is a string lmao
             'path': Path(writepath),
         }
-        info_dict['display_name'] = f'{info_dict['artist']} - {info_dict['title']}'
+        info_dict['display_name'] = f"{info_dict['artist']} - {info_dict['title']}"
         
         # Save extrasPath
         if extrasPath and not self.downloadObject.extrasPath: self.downloadObject.extrasPath = extrasPath

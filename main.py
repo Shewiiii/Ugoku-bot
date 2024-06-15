@@ -1,19 +1,16 @@
 import discord
-from discord.ext import commands
 import asyncio
 
-from deemix.types.DownloadObjects import Single, Collection
 
 import logging
 import os
-from discord.ui.item import Item
 from dotenv import load_dotenv
-from line import get_stickerpack
-from song_downloader import *
-from exceptions import *
-from settings import *
-from fetch_arls import *
-from timer import Timer
+from bot.line import get_stickerpack
+from bot.song_downloader import *
+from deemix.exceptions import *
+from bot.settings import *
+from bot.fetch_arls import *
+from bot.timer import Timer
 
 
 logging.basicConfig(
@@ -27,6 +24,12 @@ load_dotenv()
 bot = discord.Bot()
 TOKEN = os.getenv('DISCORD_TOKEN')
 ARL = os.getenv('DEEZER_ARL')
+
+vc_config_path = Path('.') / 'deemix' / 'vc_config'
+
+# VC deemix settings: ignore tags and download only the song itself
+# Init settings
+vc_settings = loadSettings(vc_config_path)
 
 
 @bot.command(name="ping", description='Test the reactivity of Ugoku !')
@@ -308,8 +311,10 @@ class ServerSession:
     def display_queue(
         self
     ) -> str:
-        currently_playing = f'Currently playing: {self.queue[0]['display_name']}'
-        return currently_playing + '\n' + '\n'.join([f'{i + 1}. {s['display_name']}' for i, s in enumerate(self.queue[1:])])
+        currently_playing = (
+            f"Currently playing: {self.queue[0]['display_name']}"
+        )
+        return currently_playing + '\n' + '\n'.join([f"{i + 1}. {s['display_name']}" for i, s in enumerate(self.queue[1:])])
 
     async def add_to_queue(
         self,
@@ -318,14 +323,21 @@ class ServerSession:
     ) -> None:  # does not auto start playing the playlist
         self.queue.append(info_dict)
         if self.voice_client.is_playing():
-            await ctx.edit(content=f'Added to queue: {info_dict['display_name']}')
+            await ctx.edit(
+                content=f"Added to queue: {info_dict['display_name']}"
+            )
 
     async def start_playing(self, ctx) -> None:
         self.voice_client.play(
-            discord.FFmpegOpusAudio(self.queue[0]['path'], bitrate=510),
+            discord.FFmpegOpusAudio(
+                self.queue[0]['path'], 
+                bitrate=510,
+            ),
             after=lambda e=None: self.after_playing(ctx, e)
         )
-        await ctx.edit(content=f'Now playing: {self.queue[0]['display_name']}')
+        await ctx.edit(
+            content=f"Now playing: {self.queue[0]['display_name']}"
+        )
 
     def after_playing(
         self,
@@ -336,7 +348,10 @@ class ServerSession:
             raise error
         else:
             if self.queue:
-                asyncio.run_coroutine_threadsafe(self.play_next(ctx), bot.loop)
+                asyncio.run_coroutine_threadsafe(
+                    self.play_next(ctx), 
+                    bot.loop
+                )
 
     # should be called only after making the
     # first element of the queue the song to play
@@ -346,8 +361,8 @@ class ServerSession:
     ) -> None:
         self.queue.pop(0)
         if self.queue:
-            await ctx.respond(
-                content=f'Now playing: {self.queue[0]['display_name']}'
+            await ctx.send(
+                content=f"Now playing: {self.queue[0]['display_name']}"
             )
             self.voice_client.play(
                 discord.FFmpegOpusAudio(self.queue[0]['path'], bitrate=510),
@@ -379,12 +394,6 @@ async def join(
     else:
         await ctx.edit(content=f'Failed to connect to voice channel {ctx.user.voice.channel.name}.')
 
-# VC deemix settings: ignore tags and download only the song itself
-localpath = Path('.')
-configFolder = localpath / 'vc_config'
-
-# Init settings
-vc_settings = loadSettings(configFolder)
 
 @vc.command(
     name='play',
@@ -418,8 +427,8 @@ async def play(
             dz = load_arl(ctx.user.id, arl)
             await ctx.edit(content=f'Getting the song...')
             all_data = await download_links(
-                dz, 
-                downloadObjects, 
+                dz,
+                downloadObjects,
                 settings=vc_settings
             )
             info_dict = all_data[0]
@@ -496,6 +505,7 @@ async def skip(ctx: discord.ApplicationContext):
         if voice_client.is_playing():
             if len(session.queue) > 1:
                 voice_client.stop()
+                await ctx.respond('Skipped !')
             else:
                 await ctx.respond('This is the last song in queue !')
 
@@ -508,7 +518,7 @@ async def show_queue(ctx: discord.ApplicationContext):
     guild_id = ctx.guild.id
     if guild_id in server_sessions:
         print('queue:', server_sessions[guild_id].display_queue())
-        await ctx.send(
+        await ctx.respond(
             f'{server_sessions[guild_id].display_queue()}'
         )
 

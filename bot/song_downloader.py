@@ -3,10 +3,9 @@ from dotenv import load_dotenv
 import os
 from os import listdir
 from os.path import isfile, join
-from datetime import datetime, timedelta
-import json
+from datetime import datetime
+from typing import *
 
-from concurrent.futures import ThreadPoolExecutor
 from deezer import Deezer
 from deezer import TrackFormats
 from deemix import generateDownloadObject
@@ -16,16 +15,12 @@ import deemix.utils.localpaths as localpaths
 from deemix.downloader import Downloader
 from deemix.itemgen import GenerationError
 from deemix.plugins.spotify import Spotify
-from deemix.itemgen import generateTrackItem
-from deemix.types.DownloadObjects import Single, Collection
-from deemix.types.Track import Track
-from deemix.utils.pathtemplates import generatePath
 from zipfile import ZipFile
 
 import discord
-from timer import Timer
+from bot.timer import Timer
 
-from exceptions import *
+from deemix.exceptions import *
 
 
 class LogListener:
@@ -37,22 +32,20 @@ class LogListener:
 
 # ----------GLOBAL SETTINGS----------
 
-
+# env things
 load_dotenv()
 ARL = os.getenv('DEEZER_ARL')
 
-# Check for local configFolder
-localpath = Path('.')
-configFolder = localpath / 'config'
+config_path = Path('.') / 'deemix' / 'config'
 
 # Init settings
-settings = loadSettings(configFolder)
+settings = loadSettings(config_path)
 
 # Load deezer
 dz = Deezer()
 listener = LogListener()
 plugins = {
-    "spotify": Spotify(configFolder=configFolder)
+    "spotify": Spotify(configFolder=config_path)
 }
 plugins["spotify"].setup()
 
@@ -66,7 +59,7 @@ custom_arls = {}
 # ------------------------------------
 
 
-def get_format(bitrate: int | str,):
+def get_format(bitrate: Literal[9, 3, 1, 15, 14, 13] | None):
     if bitrate == TrackFormats.FLAC:
         format_ = 'flac'
     else:
@@ -94,7 +87,7 @@ def recursive_write(path, zip_file):
 def get_objects(
     url: str | list,
     dz: Deezer,
-    bitrate: str,
+    bitrate: Literal[9, 3, 1, 15, 14, 13] | None,
     plugins: dict,
     listener: LogListener,
 ) -> list:
@@ -154,7 +147,7 @@ def init_dl(
     dz = load_arl(guild_id, arl)
 
     # Set the path according to the bitrate/format
-    settings['downloadLocation'] = f'{settings['downloadLocation']}/{brfm}'
+    settings['downloadLocation'] = f"{settings['downloadLocation']}/{brfm}"
     bitrate = getBitrateNumberFromText(str(brfm))
     format_ = get_format(bitrate)
 
@@ -180,7 +173,6 @@ def init_dl(
                 listener
             )
         converted_objs.append(obj)
-
 
     return converted_objs, format_
 

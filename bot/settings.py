@@ -1,7 +1,10 @@
-import discord
 import json
-from const import Constants
 import logging
+
+from pathlib import Path
+
+
+settings_path = Path('.') / 'bot' / 'config' / 'settings.json'
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,7 +17,7 @@ async def change_settings(
     guild_id: int,
     setting: str,
     value,
-    path: str = Constants.SETTINGS_PATH
+    path: str = settings_path
 ) -> None:
     with open(path, 'r') as json_file:
         settings = json.load(json_file)
@@ -31,7 +34,7 @@ def get_setting(
     guild_id: int | str,
     setting: int | str,
     default: int | str,
-    path: str = Constants.SETTINGS_PATH,
+    path: str = settings_path,
 ) -> str | int:
     guild_id = str(guild_id)
     with open(path, 'r') as json_file:
