@@ -47,17 +47,12 @@ get = bot.create_group(
 
 @get.command(
     name='stickers',
-    description='Download a LINE sticker pack from a given URL or a sticker pack ID.',
+    description='Download a LINE sticker pack from a given URL.',
 )
 @discord.option(
     'url',
     type=discord.SlashCommandOptionType.string,
     description='URL of a sticker pack from LINE Store.',
-)
-@discord.option(
-    'id',
-    type=discord.SlashCommandOptionType.integer,
-    description='Sticker pack ID. Can be found in the url.',
 )
 @discord.option(
     'gif',
@@ -77,7 +72,6 @@ get = bot.create_group(
 )
 async def stickers(
     ctx: discord.ApplicationContext,
-    id: str | None = None,
     url: int | None = None,
     gif: bool = True,
     loop=0,
@@ -88,8 +82,6 @@ async def stickers(
         await ctx.respond(f'Please specify a URL or a sticker pack ID.')
     else:
         await ctx.respond(f'Give me a second !')
-        if id:
-            url = f'https://store.line.me/stickershop/product/{id}'
         zip_file = get_stickerpack(url, gif=gif, loop=loop)
         await ctx.send(
             file=discord.File(zip_file),
@@ -118,7 +110,7 @@ async def stickers(
 async def songs(
     ctx: discord.ApplicationContext,
     url,
-    format: str | None = None,
+    format: str | int | None = None,
 ) -> None:
     timer = Timer()
 
@@ -330,7 +322,7 @@ class ServerSession:
     async def start_playing(self, ctx) -> None:
         self.voice_client.play(
             discord.FFmpegOpusAudio(
-                self.queue[0]['path'], 
+                self.queue[0]['path'],
                 bitrate=510,
             ),
             after=lambda e=None: self.after_playing(ctx, e)
@@ -349,7 +341,7 @@ class ServerSession:
         else:
             if self.queue:
                 asyncio.run_coroutine_threadsafe(
-                    self.play_next(ctx), 
+                    self.play_next(ctx),
                     bot.loop
                 )
 
@@ -376,14 +368,30 @@ class ServerSession:
 )
 async def join(
     ctx: discord.ApplicationContext,
-    channel: discord.VoiceChannel
+    channel: discord.VoiceChannel,
+    predecessor: bool = False,
 ) -> None:
     if ctx.voice_client is not None:
         await ctx.voice_client.move_to(channel)
-        await ctx.edit(content=f'Joined {ctx.voice_client.channel.name} !')
+        if predecessor:
+            await ctx.edit(
+                content=f'Joined {ctx.voice_client.channel.name} !'
+            )
+        else:
+            await ctx.respond(
+                f'Joined {ctx.voice_client.channel.name} !'
+            )
+
     else:
         await channel.connect()
-        await ctx.edit(content=f'Joined {ctx.voice_client.channel.name} !')
+        if predecessor:
+            await ctx.edit(
+                content=f'Joined {ctx.voice_client.channel.name} !'
+            )
+        else:
+            await ctx.respond(
+                f'Joined {ctx.voice_client.channel.name} !'
+            )
 
     if ctx.voice_client.is_connected():
         server_sessions[ctx.guild.id] = ServerSession(
@@ -445,7 +453,11 @@ async def play(
                     )
                     return
                 else:
-                    session = await join(ctx, ctx.user.voice.channel)
+                    session = await join(
+                        ctx,
+                        ctx.user.voice.channel,
+                        predecessor=True
+                    )
 
             else:  # is connected to a VC
                 session = server_sessions[guild_id]
@@ -521,6 +533,37 @@ async def show_queue(ctx: discord.ApplicationContext):
         await ctx.respond(
             f'{server_sessions[guild_id].display_queue()}'
         )
+
+
+@vc.command(
+    name='clear',
+    description='Clear the queue and stop current song.'
+)
+async def clear(
+    ctx: discord.ApplicationContext
+):
+    guild_id = ctx.guild.id
+    if guild_id in server_sessions:
+        voice_client = server_sessions[guild_id].voice_client
+        server_sessions[guild_id].queue = []
+        if voice_client.is_playing():
+            voice_client.stop()
+        await ctx.send('Queue cleared !')
+
+
+@vc.command(
+    name='leave',
+    description='Nooooo （＞人＜；）')
+async def leave(
+    ctx: discord.ApplicationContext
+):
+    guild_id = ctx.guild.id
+    if guild_id in server_sessions:
+        voice_client = server_sessions[guild_id].voice_client
+        await voice_client.disconnect()
+        voice_client.cleanup()
+        del server_sessions[guild_id]
+        await ctx.respond(f'Baibai !')
 
 
 @vc.command(

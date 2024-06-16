@@ -34,7 +34,7 @@ class LogListener:
 
 # env things
 load_dotenv()
-ARL = os.getenv('DEEZER_ARL')
+ARL = str(os.getenv('DEEZER_ARL'))
 
 config_path = Path('.') / 'deemix' / 'config'
 
@@ -85,12 +85,14 @@ def recursive_write(path, zip_file):
 
 
 def get_objects(
-    url: str | list,
-    dz: Deezer,
+    url: list,
+    dz: Deezer | None,
     bitrate: Literal[9, 3, 1, 15, 14, 13] | None,
     plugins: dict,
     listener: LogListener,
-) -> list:
+) -> list | None:
+    if not dz:
+        return
     links = []
     for link in url:
         if ';' in link:
@@ -121,10 +123,12 @@ def get_objects(
     return downloadObjects
 
 
-def load_arl(user_id: int, arl: str) -> Deezer:
+def load_arl(user_id: int | None, arl: str | None) -> Deezer | None:
     global custom_arls
     global dz
-    if arl == ARL:
+    if not arl:
+        return
+    elif arl == ARL:
         return dz
     elif user_id in custom_arls:
         return custom_arls[user_id]
@@ -142,7 +146,7 @@ def init_dl(
     brfm: str = 'mp3 320',
     arl: str = ARL,
     settings: dict = settings
-) -> tuple[list, str, Deezer]:
+) -> tuple[list, str] | None:
     # Check if custom_arl
     dz = load_arl(guild_id, arl)
 
@@ -154,25 +158,26 @@ def init_dl(
     brfm = brfm.lower()
 
     # Init objects
-    url = [url]
     downloadObjects = get_objects(
-        url=url,
+        url=[url],
         dz=dz,
         bitrate=bitrate,
         plugins=plugins,
         listener=listener,
     )
-    converted_objs = []
-
-    for obj in downloadObjects:
-        if obj.__type__ == "Convertable":
-            obj = plugins[obj.plugin].convert(
-                dz,
-                obj,
-                settings,
-                listener
-            )
-        converted_objs.append(obj)
+    if not downloadObjects:
+        return
+    else:
+        converted_objs = []
+        for obj in downloadObjects:
+            if obj.__type__ == "Convertable":
+                obj = plugins[obj.plugin].convert(
+                    dz,
+                    obj,
+                    settings,
+                    listener
+                )
+            converted_objs.append(obj)
 
     return converted_objs, format_
 
@@ -209,13 +214,16 @@ async def download_links(
 async def download(
     downloadObjects: list,
     format_: str,
-    guild_id: int,
+    guild_id: int | None,
     ctx: discord.ApplicationContext,
-    arl: str = ARL,
+    arl: str | int | None = ARL,
     timer: Timer | None = None,
-) -> dict:
+) -> dict | None:
+    arl = str(arl)
     # Check if custom_arl
     dz = load_arl(guild_id, arl)
+    if not dz:
+        return
 
     # Download all
     all_data = await download_links(
