@@ -123,14 +123,18 @@ def get_objects(
     return downloadObjects
 
 
-def load_arl(user_id: int | None, arl: str | None) -> Deezer | None:
+def load_arl(
+    user_id: int | None, 
+    arl: str | None,
+    force: bool = False
+) -> Deezer | None:
     global custom_arls
     global dz
     if not arl:
         return
     elif arl == ARL:
         return dz
-    elif user_id in custom_arls:
+    elif user_id in custom_arls and not force:
         return custom_arls[user_id]
     else:
         # New Deezer instance
@@ -142,13 +146,13 @@ def load_arl(user_id: int | None, arl: str | None) -> Deezer | None:
 
 def init_dl(
     url: str,
-    guild_id: int,
+    user_id: int,
     brfm: str = 'mp3 320',
     arl: str = ARL,
     settings: dict = settings
 ) -> tuple[list, str] | None:
     # Check if custom_arl
-    dz = load_arl(guild_id, arl)
+    dz = load_arl(user_id, arl)
 
     # Set the path according to the bitrate/format
     settings['downloadLocation'] = f"{settings['downloadLocation']}/{brfm}"
@@ -214,14 +218,13 @@ async def download_links(
 async def download(
     downloadObjects: list,
     format_: str,
-    guild_id: int | None,
     ctx: discord.ApplicationContext,
     arl: str | int | None = ARL,
     timer: Timer | None = None,
 ) -> dict | None:
     arl = str(arl)
     # Check if custom_arl
-    dz = load_arl(guild_id, arl)
+    dz = load_arl(ctx.user.id, arl)
     if not dz:
         return
 

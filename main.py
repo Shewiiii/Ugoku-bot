@@ -169,7 +169,6 @@ async def songs(
         results = await download(
             downloadObjects,
             format_,
-            guild_id=ctx.guild_id,
             ctx=ctx,
             arl=arl,
             timer=timer,
@@ -194,14 +193,13 @@ async def songs(
                 )
                 downloadObjects, format_ = init_dl(
                     url=url,
-                    guild_id=ctx.guild_id,
+                    user_id=ctx.user.id,
                     arl=arl,
                     brfm='mp3 320'
                 )
                 results = await download(
                     downloadObjects,
-                    format_,
-                    guild_id=ctx.guild_id,
+                    format_=format_,
                     ctx=ctx,
                     arl=arl,
                     timer=timer,
@@ -291,13 +289,17 @@ async def custom_arl(
     country: str
 ) -> None:
     arl = get_arl(country)
+    await ctx.respond("Give me a second !")
     if arl:
         await change_settings(ctx.author.id, 'publicArl', arl)
-        await ctx.respond(
-            f'You are now using a Deezer ARL from {country} !'
+        load_arl(ctx.user.id, arl=arl, force=True)
+        await ctx.edit(
+            content=f'You are now using a Deezer ARL from {country} !'
         )
     else:
-        await ctx.respond(f"Sorry ! The country {country} isn't available.")
+        await ctx.edit(
+            content=f"Sorry ! The country {country} isn't available."
+        )
 
 
 @set.command(
@@ -305,8 +307,10 @@ async def custom_arl(
     description='Change your Deezer localization.'
 )
 async def default_arl(ctx: discord.ApplicationContext) -> None:
+    await ctx.respond("Give me a second !")
     await change_settings(ctx.author.id, 'publicArl', ARL)
-    await ctx.respond("You are now using the default ARL !")
+    load_arl(ctx.user.id, arl=ARL, force=True)
+    await ctx.edit(content="You are now using the default ARL !")
 
 
 vc = bot.create_group(
@@ -530,9 +534,12 @@ async def play(
                 'publicArl',
                 ARL
             )
+            print('current arl', arl)
+            print('current arl', arl)
+            print('current arl', arl)
             downloadObjects, _ = init_dl(
                 url=url,
-                guild_id=ctx.guild_id,
+                user_id=ctx.user.id,
                 arl=arl,
                 brfm='flac',
                 settings=vc_settings
@@ -741,5 +748,22 @@ async def play_from_youtube(
     await session.add_to_queue(ctx, url, source='Youtube')
     if not session.voice_client.is_playing() and len(session.queue) <= 1:
         await session.start_playing(ctx)
+
+
+@vc.command(
+    name='talk',
+    description='!'
+)
+@discord.option(
+    'message',
+    type=discord.SlashCommandOptionType.string,
+    description='A message you want me to read !'
+)
+async def talk(
+    ctx: discord.ApplicationContext,
+    message: str
+) -> None:
+    await ctx.send(message)
+
 
 bot.run(TOKEN)
