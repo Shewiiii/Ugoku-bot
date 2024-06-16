@@ -32,7 +32,8 @@ ytdl_format_options: dict[str, Any] = {
     'no_color': True,
     'overwrites': True,
     'age_limit': 100,
-    'live_from_start': True
+    'live_from_start': True,
+    'cookiesfrombrowser': ('firefox',)
 }
 ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
 ffmpeg_options = {'options': '-vn -sn'}
@@ -374,9 +375,9 @@ class ServerSession:
 
         for i, s in enumerate(self.queue):
             if s['source'] == 'Youtube':
-                string += f'{i}. {s['element']}\n'
+                string += f"{i}. {s['element']}\n"
             else:
-                string += f'{i}. {s['element']['display_name']}\n'
+                string += f"{i}. {s['element']['display_name']}\n"
 
         return string.replace('0.', '')
 
@@ -419,8 +420,8 @@ class ServerSession:
             )
         else:
             await ctx.edit(
-                content=f"Now playing: {
-                    self.queue[0]['element']['display_name']}"
+                content=("Now playing: "
+                         f"{self.queue[0]['element']['display_name']}")
             )
             self.voice_client.play(
                 discord.FFmpegOpusAudio(
@@ -461,8 +462,8 @@ class ServerSession:
             else:
                 # Element: deezer element
                 await ctx.send(
-                    content=f"Now playing: {
-                        self.queue[0]['element']['display_name']}"
+                    content=("Now playing: "
+                             f"{self.queue[0]['element']['display_name']}")
                 )
                 self.voice_client.play(
                     discord.FFmpegOpusAudio(
