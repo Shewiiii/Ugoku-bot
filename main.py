@@ -1,16 +1,41 @@
 import discord
+import yt_dlp
 import asyncio
 
-
+import urllib
+import re
 import logging
 import os
 from dotenv import load_dotenv
 from bot.line import get_stickerpack
-from bot.song_downloader import *
+from bot.downloader import *
 from deemix.exceptions import *
 from bot.settings import *
-from bot.fetch_arls import *
+from bot.arls import *
 from bot.timer import Timer
+
+# From https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5
+yt_dlp.utils.bug_reports_message = lambda: ''  # disable yt_dlp bug report
+ytdl_format_options: dict[str, Any] = {
+    'format': 'bestaudio',
+    'outtmpl': 'output/videos/%(extractor)s-%(id)s-%(title)s.%(ext)s',
+    'restrictfilenames': True,
+    'no-playlist': True,
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'geo-bypass': True,
+    'quiet': True,
+    'no_warnings': True,
+    'default_search': 'auto',
+    'source_address': '0.0.0.0',
+    'no_color': True,
+    'overwrites': True,
+    'age_limit': 100,
+    'live_from_start': True
+}
+ytdl = yt_dlp.YoutubeDL(ytdl_format_options)
+ffmpeg_options = {'options': '-vn -sn'}
 
 
 logging.basicConfig(
@@ -291,6 +316,44 @@ vc = bot.create_group(
 
 
 # From https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5
+class Source:
+    """Parent class of all music sources"""
+
+    def __init__(self, audio_source: discord.AudioSource, metadata):
+        self.audio_source: discord.AudioSource = audio_source
+        self.metadata = metadata
+        self.title: str = metadata.get('title', 'Unknown title')
+        self.url: str = metadata.get('url', 'Unknown URL')
+
+    def __str__(self):
+        return f'{self.title} ({self.url})'
+
+
+class YTDLSource(Source):
+    """Subclass of YouTube sources"""
+
+    def __init__(self, audio_source: discord.AudioSource, metadata):
+        super().__init__(audio_source, metadata)
+        # yt-dlp specific key name for original URL
+        self.url: str = metadata.get('webpage_url', 'Unknown URL')
+
+    @classmethod
+    async def from_url(cls, url, *, loop=None, stream=True):
+        loop = loop or asyncio.get_event_loop()
+        metadata = await loop.run_in_executor(
+            None, lambda: ytdl.extract_info(url, download=not stream)
+        )
+        if 'entries' in metadata:
+            metadata = metadata['entries'][0]
+        filename = metadata['url'] if stream else ytdl.prepare_filename(
+            metadata)
+        return cls(await discord.FFmpegOpusAudio.from_probe(
+            filename,
+            **ffmpeg_options),
+            metadata
+        )
+
+
 server_sessions = {}
 
 
@@ -303,33 +366,65 @@ class ServerSession:
     def display_queue(
         self
     ) -> str:
-        currently_playing = (
-            f"Currently playing: {self.queue[0]['display_name']}"
-        )
-        return currently_playing + '\n' + '\n'.join([f"{i + 1}. {s['display_name']}" for i, s in enumerate(self.queue[1:])])
+        string = f"Currently playing: "
+
+        for i, s in enumerate(self.queue):
+            if s['source'] == 'Youtube':
+                string += f'{i}. {s['element']}\n'
+            else:
+                string += f'{i}. {s['element']['display_name']}\n'
+
+        return string.replace('0.', '')
 
     async def add_to_queue(
         self,
         ctx: discord.ApplicationContext,
-        info_dict: dict
+        element: dict | str,
+        source: str | None = None
     ) -> None:  # does not auto start playing the playlist
-        self.queue.append(info_dict)
-        if self.voice_client.is_playing():
-            await ctx.edit(
-                content=f"Added to queue: {info_dict['display_name']}"
+        # Basically element is a string is youtube, or a dict if from Deezer..
+        if source == 'Youtube':
+            yt_source = await YTDLSource.from_url(
+                element,
+                loop=bot.loop,
+                stream=False
             )
+            self.queue.append({'element': yt_source, 'source': source})
+            if len(self.queue) > 1:
+                await ctx.edit(
+                    content=f'Added to queue: {yt_source.title} !')
+        else:
+            self.queue.append({'element': element, 'source': source})
+            if len(self.queue) > 1:
+                await ctx.edit(
+                    content=f"Added to queue: {element['display_name']} !"
+                )
 
-    async def start_playing(self, ctx) -> None:
-        self.voice_client.play(
-            discord.FFmpegOpusAudio(
-                self.queue[0]['path'],
-                bitrate=510,
-            ),
-            after=lambda e=None: self.after_playing(ctx, e)
-        )
-        await ctx.edit(
-            content=f"Now playing: {self.queue[0]['display_name']}"
-        )
+    async def start_playing(
+        self,
+        ctx: discord.ApplicationContext
+    ) -> None:
+        source = self.queue[0]['source']
+        if source == 'Youtube':
+            await ctx.edit(
+                content=f"Now playing: {self.queue[0]['element'].title} !"
+            )
+            self.voice_client.play(
+                self.queue[0]['element'].audio_source,
+                after=lambda e=None: self.after_playing(ctx, e)
+            )
+        else:
+            await ctx.edit(
+                content=f"Now playing: {
+                    self.queue[0]['element']['display_name']}"
+            )
+            self.voice_client.play(
+                discord.FFmpegOpusAudio(
+                    self.queue[0]['element']['path'],
+                    bitrate=510,
+                ),
+                after=lambda e=None: self.after_playing(ctx, e)
+            )
 
     def after_playing(
         self,
@@ -349,17 +444,27 @@ class ServerSession:
     # first element of the queue the song to play
     async def play_next(
         self,
-        ctx: discord.ApplicationContext,
+        ctx: discord.ApplicationContext
     ) -> None:
         self.queue.pop(0)
         if self.queue:
-            await ctx.send(
-                content=f"Now playing: {self.queue[0]['display_name']}"
-            )
-            self.voice_client.play(
-                discord.FFmpegOpusAudio(self.queue[0]['path'], bitrate=510),
-                after=lambda e=None: self.after_playing(ctx, e)
-            )
+            if self.queue[0]['source'] == 'Youtube':
+                # Element: yt-dl element
+                self.voice_client.play(
+                    self.queue[0]['element'].audio_source,
+                    after=lambda e=None: self.after_playing(ctx, e)
+                )
+            else:
+                # Element: deezer element
+                await ctx.send(
+                    content=f"Now playing: {
+                        self.queue[0]['element']['display_name']}"
+                )
+                self.voice_client.play(
+                    discord.FFmpegOpusAudio(
+                        self.queue[0]['element']['path'], bitrate=510),
+                    after=lambda e=None: self.after_playing(ctx, e)
+                )
 
 
 @vc.command(
@@ -453,7 +558,7 @@ async def play(
                     )
                     return
                 else:
-                    session = await join(
+                    session: ServerSession = await join(
                         ctx,
                         ctx.user.voice.channel,
                         predecessor=True
@@ -578,5 +683,63 @@ async def channel_bitrate(
     except:
         await ctx.respond('You are not in a voice channel !')
 
+
+# Still mainly from
+# https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5
+# For Ika and Laser xD
+@vc.command(
+    name='play-from-youtube',
+    description='Play any videos from Youtube !'
+)
+@discord.option(
+    'query',
+    type=discord.SlashCommandOptionType.string,
+    description='URL or a search query.'
+)
+async def play_from_youtube(
+    ctx: discord.ApplicationContext,
+    query: str
+):
+    await ctx.respond('Give me a second !')
+    guild_id = ctx.guild.id
+    if guild_id not in server_sessions:  # not connected to any VC
+        if ctx.user.voice is None:
+            await ctx.send(f'You are not connected to any voice channel !')
+            return
+        else:
+            session: ServerSession = await join(
+                ctx,
+                ctx.user.voice.channel,
+                predecessor=True
+            )
+    else:  # is connected to a VC
+        session = server_sessions[guild_id]
+        # connected to a different VC than the command issuer (but within the same server)
+        if session.voice_client.channel != ctx.user.voice.channel:
+            await session.voice_client.move_to(ctx.user.voice.channel)
+            await ctx.edit(content=f'Connected to {ctx.user.voice.channel} !')
+
+    try:
+        await ctx.edit(content='Downloading the video...')
+        requests.get(query)
+
+    # if not a valid URL, do search and play the first video in search result
+    except (requests.ConnectionError, requests.exceptions.MissingSchema):
+        query_string = urllib.parse.urlencode({"search_query": query})
+        formatUrl = urllib.request.urlopen(
+            "https://www.youtube.com/results?" + query_string)
+        search_results = re.findall(
+            r"watch\?v=(\S{11})", formatUrl.read().decode())
+        url = f'https://www.youtube.com/watch?v={search_results[0]}'
+
+    except requests.exceptions.InvalidSchema:
+        await ctx.edit(content=f'Hmm it seems like the URL is not valid!')
+
+    else:  # is a valid URL, play directly
+        url = query
+    # will download file here
+    await session.add_to_queue(ctx, url, source='Youtube')
+    if not session.voice_client.is_playing() and len(session.queue) <= 1:
+        await session.start_playing(ctx)
 
 bot.run(TOKEN)

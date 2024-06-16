@@ -2,7 +2,10 @@
 
 - Download stickers from LINE.
 - Download songs, albums or playlists from Deezer (with a Deezer or Spotify link).
-- Play songs in vc, with the **best possible audio quality (Opus 510kbps),** regardless the bitrate of the channel you are in.
+- Play songs in vc, with the **best possible audio quality**.
+  - Bypasses the channel's audio bitrate.
+  - Audio taken from lossless files, then converted to Opus 510kbps.
+- Play songs/videos in vc from Youtube, with standard audio quality.
 - Set default file format/bitrate (Available: FLAC, MP3 320 or MP3 128).
 
 ## To do:
@@ -20,7 +23,7 @@
 ## Known bugs:
 
 - Can't download most animated stickers on LINE when downloaded using GIF format: "TypeError: color must be int or single-element tuple".
-- Custom ARL not used when playing a song in vc (/vc play)
-- No mesages sent when a song is not available when /vc play
+- Custom ARL not used when playing a song in vc (/vc play).
+- No mesages sent when a song is not available when /vc play.
 
-Some of the code for the player comes from [this github gist](https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5) !
+Most of the code of the player comes from [this github gist](https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5) !

@@ -166,7 +166,7 @@ def init_dl(
         listener=listener,
     )
     if not downloadObjects:
-        return
+        raise TrackNotFound
     else:
         converted_objs = []
         for obj in downloadObjects:
