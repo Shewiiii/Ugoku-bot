@@ -318,7 +318,7 @@ class Source:
         self.url: str = metadata.get('url', 'Unknown URL')
 
     def __str__(self):
-        return f'{self.title} ({self.url})'
+        return f'{self.title} (<{self.url}>)'
 
 
 class YTDLSource(Source):
@@ -361,12 +361,25 @@ class ServerSession:
         if not self.queue:
             return 'No songs in queue !'
 
-        elements = [
-            f"Currently playing: {self.queue[0]['element']['display_name']}\n"
-        ]
+        # Currently playing
+        # Youtube
+        if self.queue[0]['source'] == 'Youtube':
+            elements = [
+                f"Currently playing: {self.queue[0]['element']}\n"
+            ]
+        # Deezer
+        else:
+            elements = [
+                ("Currently playing: "
+                 f"{self.queue[0]['element']['display_name']}\n")
+            ]
+
+        # The actual list
         for i, s in enumerate(self.queue[1:], start=1):
+            # Youtube
             if s['source'] == 'Youtube':
                 elements.append(f"{i}. {s['element']}\n")
+            # Deezer
             else:
                 elements.append(f"{i}. {s['element']['display_name']}\n")
 
@@ -719,7 +732,7 @@ async def play_from_youtube(
             await ctx.edit(content=f'Connected to {ctx.user.voice.channel} !')
 
     try:
-        await ctx.edit(content='Downloading the video...')
+        await ctx.edit(content='Downloading the audio...')
         requests.get(query)
 
     # if not a valid URL, do search and play the first video in search result
@@ -742,6 +755,7 @@ async def play_from_youtube(
         await session.start_playing(ctx)
 
 # End of vc commands
+
 
 @bot.command(
     name='talk',
