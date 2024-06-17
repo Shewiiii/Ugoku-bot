@@ -10,7 +10,8 @@
 
 ## To do:
 
-- Finish the music player:- Add the possibility to search a song instead of giving a deezer/spotify link.
+- Finish the music player:
+  - Add the possibility to search a song instead of giving a deezer/spotify link.
   - Add a command to pop songs from queue list.
   - ...
 - Add a /meaning command, to search the meaning (+sentence/pitch accent/...) of a Japanese word.
