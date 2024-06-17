@@ -79,10 +79,10 @@ def get_stickerpack(
     # Save the stickers
     for i in range(sticker_count):
         link = get_link(stickers[i]['data-preview'])
-        image = requests.get(link).content
+        neko_arius = requests.get(link).content
 
         with open(f'{path}\\{i+1}.png', 'wb') as png_file:
-            png_file.write(image)
+            png_file.write(neko_arius)
 
     # Convert apngs to gif if wanted and if there are
     if gif and sticker_type in ['animation-sticker', 'popup-sticker']:

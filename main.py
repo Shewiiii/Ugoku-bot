@@ -218,12 +218,7 @@ async def songs(
         )
         await ctx.edit(content=f'Done ! {timer.total()}')
 
-    except InvalidARL:
-        await ctx.edit(
-            content=('The Deezer ARL is not valid. '
-                     'Please contact the developer or use a custom ARL.')
-        )
-    except FileNotFoundError:
+    except (InvalidARL, FileNotFoundError):
         await ctx.edit(
             content=('The Deezer ARL is not valid. '
                      'Please contact the developer or use a custom ARL.')
@@ -367,9 +362,9 @@ class ServerSession:
             return 'No songs in queue !'
 
         elements = [
-            f"Currently playing: {self.queue[0]['element']}\n"
+            f"Currently playing: {self.queue[0]['element']['display_name']}\n"
         ]
-        for i, s in enumerate(self.queue, start=1):
+        for i, s in enumerate(self.queue[1:], start=1):
             if s['source'] == 'Youtube':
                 elements.append(f"{i}. {s['element']}\n")
             else:
@@ -408,7 +403,7 @@ class ServerSession:
         source = self.queue[0]['source']
         if source == 'Youtube':
             await ctx.edit(
-                content=f"Now playing: {self.queue[0]['element'].title} !"
+                content=f"Now playing: {self.queue[0]['element'].title}"
             )
             self.voice_client.play(
                 self.queue[0]['element'].audio_source,
@@ -511,12 +506,12 @@ async def join(
 
 @vc.command(
     name='play',
-    description='(VERY LOUD !!!!1) Select a song to play.'
+    description='Select a song to play.'
 )
 @discord.option(
     'url',
     type=discord.SlashCommandOptionType.string,
-    description='Deezer or Spotify url of a song/album/playlist.'
+    description='Deezer or Spotify url of a song.'
 )
 async def play(
     ctx: discord.ApplicationContext,
@@ -682,10 +677,10 @@ async def leave(
 async def channel_bitrate(
     ctx: discord.ApplicationContext
 ) -> None:
-    try:
+    if ctx.author.voice:
         await ctx.respond(f'{ctx.author.voice.channel.bitrate//1000}kbps.')
-    except:
-        await ctx.respond('You are not in a voice channel !')
+    else:
+        await ctx.respond(f'You are not in a voice channel !')
 
 
 # Still mainly from
@@ -746,8 +741,9 @@ async def play_from_youtube(
     if not session.voice_client.is_playing() and len(session.queue) <= 1:
         await session.start_playing(ctx)
 
+# End of vc commands
 
-@vc.command(
+@bot.command(
     name='talk',
     description='!'
 )
