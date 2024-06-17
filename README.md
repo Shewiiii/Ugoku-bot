@@ -21,7 +21,6 @@
 
 ## Known bugs:
 
-- Can't download most animated stickers on LINE when downloaded using GIF format: "TypeError: color must be int or single-element tuple".
 - No mesages sent when a song is not available when /vc play.
 
 Most of the code of the player comes from [this github gist](https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5) !

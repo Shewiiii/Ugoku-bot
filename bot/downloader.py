@@ -11,7 +11,6 @@ from deezer import TrackFormats
 from deemix import generateDownloadObject
 from deemix.settings import load as loadSettings
 from deemix.utils import getBitrateNumberFromText, formatListener
-import deemix.utils.localpaths as localpaths
 from deemix.downloader import Downloader
 from deemix.itemgen import GenerationError
 from deemix.plugins.spotify import Spotify
@@ -67,12 +66,6 @@ def get_format(bitrate: Literal[9, 3, 1, 15, 14, 13] | None):
 
     return format_
 
-
-# def get_account_country(path: str = 'config/settings.json'):
-#     with open(path, 'r') as json_file:
-#         settings = json.load(json_file)
-
-#     return settings['country']
 
 def recursive_write(path, zip_file):
     for entry in listdir(path):

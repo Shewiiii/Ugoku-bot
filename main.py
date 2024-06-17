@@ -49,6 +49,7 @@ logging.basicConfig(
 load_dotenv()
 bot = discord.Bot()
 TOKEN = os.getenv('DISCORD_TOKEN')
+DEV_TOKEN = os.getenv('DEV_TOKEN')
 ARL = os.getenv('DEEZER_ARL')
 
 vc_config_path = Path('.') / 'deemix' / 'vc_config'
@@ -88,19 +89,10 @@ get = bot.create_group(
     autocomplete=discord.utils.basic_autocomplete(
         [True, False]),
 )
-@discord.option(
-    'loop',
-    type=discord.SlashCommandOptionType.string,
-    description=('Set how many times an animated sticker should be looped. '
-                 'Default: forever.'),
-    autocomplete=discord.utils.basic_autocomplete(
-        ['never', 'forever']),
-)
 async def stickers(
     ctx: discord.ApplicationContext,
     url: int | None = None,
     gif: bool = True,
-    loop=0,
 ) -> None:
     timer = Timer()
 
@@ -108,7 +100,7 @@ async def stickers(
         await ctx.respond(f'Please specify a URL or a sticker pack ID.')
     else:
         await ctx.respond(f'Give me a second !')
-        zip_file = get_stickerpack(url, gif=gif, loop=loop)
+        zip_file = get_stickerpack(url, gif=gif)
         await ctx.send(
             file=discord.File(zip_file),
             content=(f"Sorry for the wait <@{ctx.author.id}> ! "
@@ -371,15 +363,19 @@ class ServerSession:
     def display_queue(
         self
     ) -> str:
-        string = f"Currently playing: "
+        if not self.queue:
+            return 'No songs in queue !'
 
-        for i, s in enumerate(self.queue):
+        elements = [
+            f"Currently playing: {self.queue[0]['element']}\n"
+        ]
+        for i, s in enumerate(self.queue, start=1):
             if s['source'] == 'Youtube':
-                string += f"{i}. {s['element']}\n"
+                elements.append(f"{i}. {s['element']}\n")
             else:
-                string += f"{i}. {s['element']['display_name']}\n"
+                elements.append(f"{i}. {s['element']['display_name']}\n")
 
-        return string.replace('0.', '')
+        return ''.join(elements)
 
     async def add_to_queue(
         self,
@@ -767,4 +763,4 @@ async def talk(
     await ctx.send(message)
 
 
-bot.run(TOKEN)
+bot.run(DEV_TOKEN)
