@@ -13,7 +13,6 @@
 - Add info embeds
 - Finish the music player:
   - Add the possibility to search a song instead of giving a deezer/spotify link.
-  - Add a command to make the bot leave/stop.
   - ...
 - Improve queue design
 - Add download modes (eg. upload songs one by one for albums/playlists).
