@@ -24,7 +24,6 @@
 ## Known bugs:
 
 - No mesages sent when a song is not available when /vc play -> Infinite loop
-- /vc play-from youtube not working anymore: https://github.com/yt-dlp/yt-dlp/issues/10128.
 - Clips at default volume (because of the lack of volume control with opus format).
 
 Most of the code of the player comes from [this github gist](https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5) !
