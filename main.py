@@ -9,7 +9,7 @@ import os
 from dotenv import load_dotenv
 from bot.line import get_stickerpack
 from bot.downloader import *
-from deemix.exceptions import *
+from bot.exceptions import *
 from bot.settings import *
 from bot.arls import *
 from bot.timer import Timer
@@ -148,7 +148,7 @@ async def songs(
     try:
         downloadObjects, format_ = init_dl(
             url=url,
-            guild_id=ctx.guild_id,
+            user_id=ctx.user.id,
             arl=arl,
             brfm=format
         )
@@ -562,11 +562,11 @@ async def play(
 
             # Join
             guild_id = ctx.guild.id
-            if guild_id not in server_sessions:
+            if guild_id not in server_sessions or not ctx.user.voice:
                 # not connected to any VC
                 if ctx.user.voice is None:
-                    await ctx.send(
-                        f'You are not connected to any voice channel !'
+                    await ctx.edit(
+                        content=f'You are not connected to any voice channel !'
                     )
                     return
                 else:
@@ -714,9 +714,12 @@ async def play_from_youtube(
 ):
     await ctx.respond('Give me a second !')
     guild_id = ctx.guild.id
-    if guild_id not in server_sessions:  # not connected to any VC
+    # not connected to any VC
+    if guild_id not in server_sessions or not ctx.user.voice:
         if ctx.user.voice is None:
-            await ctx.send(f'You are not connected to any voice channel !')
+            await ctx.edit(
+                content=f'You are not connected to any voice channel !'
+            )
             return
         else:
             session: ServerSession = await join(

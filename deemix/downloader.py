@@ -33,7 +33,7 @@ from deemix.errors import DownloadFailed, MD5NotFound, DownloadCanceled, Preferr
 
 import discord
 from bot.timer import Timer
-from deemix.exceptions import *
+from bot.exceptions import *
 
 logger = logging.getLogger('deemix')
 

@@ -19,7 +19,7 @@ from zipfile import ZipFile
 import discord
 from bot.timer import Timer
 
-from deemix.exceptions import *
+from bot.exceptions import *
 
 
 class LogListener:
