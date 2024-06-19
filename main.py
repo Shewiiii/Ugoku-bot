@@ -13,6 +13,8 @@ from bot.exceptions import *
 from bot.settings import *
 from bot.arls import *
 from bot.timer import Timer
+from bot.search import get_song_url, is_url
+
 
 # From https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5
 yt_dlp.utils.bug_reports_message = lambda: ''  # disable yt_dlp bug report
@@ -523,26 +525,30 @@ async def join(
     description='Select a song to play.'
 )
 @discord.option(
-    'url',
+    'query',
     type=discord.SlashCommandOptionType.string,
-    description='Deezer or Spotify url of a song.'
+    description='Deezer/Spotify URL or a search query of a song.'
 )
 async def play(
     ctx: discord.ApplicationContext,
-    url: str
+    query: str
 ) -> None:
     await ctx.respond(f'Connecting to Deezer...')
-    if url:
+    if query:
         try:
+            # Not an url ? Then get it !
+            if not is_url(query, sites=['spotify', 'deezer']):
+                url = get_song_url(query)
+                if not url:
+                    await ctx.edit(content='Track not found !')
+                    return
+
             # Download
             arl = get_setting(
                 ctx.author.id,
                 'publicArl',
                 ARL
             )
-            print('current arl', arl)
-            print('current arl', arl)
-            print('current arl', arl)
             downloadObjects, _ = init_dl(
                 url=url,
                 user_id=ctx.user.id,
