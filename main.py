@@ -341,7 +341,8 @@ class YTDLSource(Source):
             metadata)
         return cls(await discord.FFmpegOpusAudio.from_probe(
             filename,
-            **ffmpeg_options),
+            **ffmpeg_options,
+            ),
             metadata
         )
 
@@ -739,7 +740,7 @@ async def play_from_youtube(
         requests.get(query)
 
     # if not a valid URL, do search and play the first video in search result
-    except (requests.ConnectionError, requests.exceptions.MissingSchema):
+    except (requests.exceptions.InvalidURL, requests.exceptions.MissingSchema):
         query_string = urllib.parse.urlencode({"search_query": query})
         formatUrl = urllib.request.urlopen(
             "https://www.youtube.com/results?" + query_string)
