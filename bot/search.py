@@ -1,7 +1,7 @@
 from deezer import API
 import requests
 import re
-
+from deezer import Deezer
 
 api = API(
     headers={
@@ -20,8 +20,12 @@ link_grabber = (r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2"
                 r".,<>?«»“”‘’]))")
 
 
-def get_song_url(query: str) -> str | None:
-    search = api.search_track(query)
+def get_song_url(query: str, dz: Deezer | None) -> str | None:
+    if dz:
+        search = dz.api.search_track(query)
+        print(search)
+    else:
+        search = api.search_track(query)
     if not search['data']:
         return None
     return search['data'][0]['link']

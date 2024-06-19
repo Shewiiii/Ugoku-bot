@@ -536,19 +536,26 @@ async def play(
     await ctx.respond(f'Connecting to Deezer...')
     if query:
         try:
-            # Not an url ? Then get it !
-            if not is_url(query, sites=['spotify', 'deezer']):
-                url = get_song_url(query)
-                if not url:
-                    await ctx.edit(content='Track not found !')
-                    return
 
-            # Download
+            # Connecting
             arl = get_setting(
                 ctx.author.id,
                 'publicArl',
                 ARL
             )
+            dz = load_arl(ctx.user.id, arl)
+            await ctx.edit(content=f'Getting the song...')
+        
+            # Not an url ? Then get it !
+            if is_url(query, sites=['spotify', 'deezer']):
+                url = query
+            else:
+                url = get_song_url(query, dz=dz)
+                if not url:
+                    await ctx.edit(content='Track not found !')
+                    return
+            
+            # Actual downloading
             downloadObjects, _ = init_dl(
                 url=url,
                 user_id=ctx.user.id,
@@ -556,8 +563,6 @@ async def play(
                 brfm='flac',
                 settings=vc_settings
             )
-            dz = load_arl(ctx.user.id, arl)
-            await ctx.edit(content=f'Getting the song...')
             all_data = await download_links(
                 dz,
                 downloadObjects,
