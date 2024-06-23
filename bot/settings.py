@@ -14,7 +14,7 @@ logging.basicConfig(
 
 
 async def change_settings(
-    guild_id: int,
+    id: int,
     setting: str,
     value,
     path: Path = settings_path
@@ -23,7 +23,7 @@ async def change_settings(
         settings = json.load(json_file)
 
     # Change value
-    settings[setting][str(guild_id)] = value
+    settings[setting][str(id)] = value
 
     # Write new data
     with open(path, 'w') as json_file:
@@ -31,23 +31,23 @@ async def change_settings(
 
 
 def get_setting(
-    guild_id: int,
+    id: int,
     setting: int | str,
-    default: int | str | None,
+    default,
     path: Path = settings_path,
-) -> int | str | None:
-    s_guild_id = str(guild_id)
+):
+    s_id = str(id)
     with open(path, 'r') as json_file:
         settings = json.load(json_file)
 
     try:
-        value = settings[setting][s_guild_id]
+        value = settings[setting][s_id]
         return value
 
     except Exception as e:
         logging.info(f'Default setting used: {e}')
         print(e)
-        settings[setting][s_guild_id] = default
+        settings[setting][s_id] = default
         with open(path, 'w') as json_file:
             json.dump(settings, json_file)
         return default

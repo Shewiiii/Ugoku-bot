@@ -2,9 +2,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 from os import listdir
-from os.path import isfile, join
 from datetime import datetime
-from typing import *
+from typing import Literal
 
 from deezer import Deezer
 from deezer import TrackFormats
@@ -13,11 +12,14 @@ from deemix.settings import load as loadSettings
 from deemix.utils import getBitrateNumberFromText, formatListener
 from deemix.downloader import Downloader
 from deemix.itemgen import GenerationError
+from deemix.types.DownloadObjects import Single, Collection
 from deemix.plugins.spotify import Spotify
 from zipfile import ZipFile
 
 import discord
 from bot.timer import Timer
+from bot.arls import get_arl, get_countries, load_arl
+from bot.search import ISO3166, A_ISO3166
 
 from bot.exceptions import *
 
@@ -31,14 +33,22 @@ class LogListener:
 
 # ----------GLOBAL SETTINGS----------
 
+
 # env things
 load_dotenv()
 ARL = str(os.getenv('DEEZER_ARL'))
+ARL_COUNTRY = os.getenv('ARL_COUNTRY')
 
 config_path = Path('.') / 'deemix' / 'config'
 
 # Init settings
 settings = loadSettings(config_path)
+
+# Init folders
+output_path = Path('.') / 'output'
+
+a_songs_path = output_path / 'archives' / 'songs'
+a_songs_path.mkdir(parents=True, exist_ok=True)
 
 # Load deezer
 dz = Deezer()
@@ -73,7 +83,6 @@ def recursive_write(path, zip_file):
         if os.path.isdir(full_path):
             recursive_write(full_path, zip_file)
         else:
-            print('write:', full_path)
             zip_file.write(full_path)
 
 
@@ -116,39 +125,20 @@ def get_objects(
     return downloadObjects
 
 
-def load_arl(
-    user_id: int | None, 
-    arl: str | None,
-    force: bool = False
-) -> Deezer | None:
-    global custom_arls
-    global dz
-    if not arl:
-        return
-    elif arl == ARL:
-        return dz
-    elif user_id in custom_arls and not force:
-        return custom_arls[user_id]
-    else:
-        # New Deezer instance
-        new_dz = Deezer()
-        new_dz.login_via_arl(arl)
-        custom_arls[user_id] = new_dz
-        return new_dz
-
-
 def init_dl(
     url: str,
     user_id: int,
     brfm: str = 'mp3 320',
-    arl: str = ARL,
+    arl_info: dict = {'arl': ARL, 'country': ARL_COUNTRY},
     settings: dict = settings
-) -> tuple[list, str] | None:
+) -> tuple[list, str]:
     # Check if custom_arl
-    dz = load_arl(user_id, arl)
+    dz = load_arl(user_id, arl_info['arl'])
 
     # Set the path according to the bitrate/format
+    og_path = settings['downloadLocation']
     settings['downloadLocation'] = f"{settings['downloadLocation']}/{brfm}"
+
     bitrate = getBitrateNumberFromText(str(brfm))
     format_ = get_format(bitrate)
 
@@ -168,7 +158,7 @@ def init_dl(
         converted_objs = []
         for obj in downloadObjects:
             if obj.__type__ == "Convertable":
-                obj = plugins[obj.plugin].convert(
+                obj: Collection = plugins[obj.plugin].convert(
                     dz,
                     obj,
                     settings,
@@ -176,6 +166,8 @@ def init_dl(
                 )
             converted_objs.append(obj)
 
+    # Put the normal path again
+    settings['downloadLocation'] = og_path
     return converted_objs, format_
 
 
@@ -191,12 +183,12 @@ async def download_links(
         # Create Track object to get final path
         try:
             all_data += await Downloader(
-                dz,
-                obj,
-                settings,
-                ctx,
-                listener,
-                timer
+                dz=dz,
+                downloadObject=obj,
+                settings=settings,
+                ctx=ctx,
+                listener=listener,
+                timer=timer
             ).start()
         except TrackNotFound:
             if len(downloadObjects) > 1 and ctx:
@@ -255,7 +247,6 @@ async def download(
         # Add files associated to each path
         for info_dict in all_data:
             path = info_dict['path']
-            print('path:', path)
 
             # Case 1.1.1: One of the thing is a folder
             if path.is_dir():
@@ -270,3 +261,39 @@ async def download(
     # Case 2: It's a song
     else:
         return {'all_data': all_data, 'path': all_data[0]['path']}
+
+
+async def dl(
+    ctx: discord.ApplicationContext,
+    url: str,
+    arl_info: dict,
+    timer: Timer,
+    format: str
+) -> str:
+    '''Download a track or a collection then returns ther path.
+    '''
+    downloadObjects, format_ = init_dl(
+        url=url,
+        user_id=ctx.user.id,
+        arl_info=arl_info,
+        brfm=format
+    )
+    if not downloadObjects:
+        raise TrackNotFound
+
+    await ctx.edit(
+        content=f'Download objects got, {timer.round()}. '
+        'Fetching track data...'
+    )
+    results = await download(
+        downloadObjects,
+        format_,
+        ctx=ctx,
+        arl=arl_info['arl'],
+        timer=timer,
+    )
+    if not results:
+        raise TrackNotFound
+    
+    path = results['path']
+    return path

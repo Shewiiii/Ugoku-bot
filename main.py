@@ -13,7 +13,8 @@ from bot.exceptions import *
 from bot.settings import *
 from bot.arls import *
 from bot.timer import Timer
-from bot.search import get_song_url, is_url
+from typing import Any
+from bot.search import get_song_url, is_url, ISO3166, A_ISO3166
 
 
 # From https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5
@@ -53,6 +54,10 @@ bot = discord.Bot()
 TOKEN = os.getenv('DISCORD_TOKEN')
 DEV_TOKEN = os.getenv('DEV_TOKEN')
 ARL = os.getenv('DEEZER_ARL')
+ARL_COUNTRY = os.getenv('ARL_COUNTRY')
+g_arl_info = {'arl': ARL, 'country': ARL_COUNTRY}
+arl_countries = get_countries()
+
 
 vc_config_path = Path('.') / 'deemix' / 'vc_config'
 
@@ -81,7 +86,7 @@ get = bot.create_group(
 @discord.option(
     'url',
     type=discord.SlashCommandOptionType.string,
-    description='URL of a sticker pack from LINE Store.',
+    description='URL of a sticker pack from LINE Store.'
 )
 @discord.option(
     'gif',
@@ -94,12 +99,15 @@ get = bot.create_group(
 async def stickers(
     ctx: discord.ApplicationContext,
     url: int | None = None,
-    gif: bool = True,
+    gif: bool = True
 ) -> None:
     timer = Timer()
 
-    if not id and not url:
-        await ctx.respond(f'Please specify a URL or a sticker pack ID.')
+    if not url:
+        await ctx.respond(
+            'Please specify an URL to a sticker pack. '
+            'E.g: https://store.line.me/stickershop/product/1472670/'
+        )
     else:
         await ctx.respond(f'Give me a second !')
         zip_file = get_stickerpack(url, gif=gif)
@@ -116,30 +124,42 @@ async def stickers(
     description='Download your favorite songs !',
 )
 @discord.option(
-    'url',
+    'query',
     type=discord.SlashCommandOptionType.string,
-    description='Spotify/Deezer URL of a song, an album or a playlist. Separate urls with semi-colons.',
+    description=(
+        'Spotify/Deezer URL or a query of a song. Separate urls with '
+        'semi-colons.'
+    )
 )
 @discord.option(
     'format',
     type=discord.SlashCommandOptionType.string,
     description='The format of the files you want to save.',
     autocomplete=discord.utils.basic_autocomplete(
-        ['FLAC', 'MP3 320', 'MP3 128']),
+        ['FLAC', 'MP3 320', 'MP3 128'])
 )
 async def songs(
     ctx: discord.ApplicationContext,
-    url,
+    query: str,
     format: str | int | None = None,
 ) -> None:
     timer = Timer()
 
     await ctx.respond(f'Give me a second !')
-    arl = get_setting(
+    arl_info: dict = get_setting(
         ctx.author.id,
         'publicArl',
-        ARL
+        g_arl_info
     )
+    arl = arl_info['arl']
+    # Not an url ? Then get it !
+    if is_url(query, sites=['spotify', 'deezer']):
+        url = query
+    else:
+        url = get_song_url(query, dz=dz)
+        if not url:
+            await ctx.edit(content='Track not found on Deezer !')
+            return
 
     if not format:
         format = get_setting(
@@ -148,33 +168,14 @@ async def songs(
             'MP3 320'
         )
     try:
-        downloadObjects, format_ = init_dl(
-            url=url,
-            user_id=ctx.user.id,
-            arl=arl,
-            brfm=format
-        )
-        if not downloadObjects:
-            raise TrackNotFound
-
-        await ctx.edit(
-            content=f'Download objects got, {timer.round()}. '
-            'Fetching track data...'
-        )
-        results = await download(
-            downloadObjects,
-            format_,
+        path = await dl(
             ctx=ctx,
-            arl=arl,
+            url=url,
+            arl_info=arl_info,
             timer=timer,
+            format=format
         )
-        path = results['path']
-
         size = os.path.getsize(path)
-        ext = os.path.splitext(path)[1][1:]
-        # To check if the Deezer account is paid (?)
-        if 'zip' != ext and ext not in format.lower():
-            raise InvalidARL
 
         logging.info(f'Chosen format: {format}')
         logging.info(f'File size: {size}, Path: {path}')
@@ -186,21 +187,13 @@ async def songs(
                     content='Track too heavy, trying '
                             'to download with MP3 320...'
                 )
-                downloadObjects, format_ = init_dl(
-                    url=url,
-                    user_id=ctx.user.id,
-                    arl=arl,
-                    brfm='mp3 320'
-                )
-                results = await download(
-                    downloadObjects,
-                    format_=format_,
+                path = await dl(
                     ctx=ctx,
-                    arl=arl,
+                    url=url,
+                    arl_info=arl_info,
                     timer=timer,
+                    format=format
                 )
-
-                path = results['path']
                 size = os.path.getsize(path)
                 logging.info(f'File size: {size}, Path: {path}')
                 if size >= ctx.guild.filesize_limit:
@@ -220,14 +213,14 @@ async def songs(
         )
         await ctx.edit(content=f'Done ! {timer.total()}')
 
-    except (InvalidARL, FileNotFoundError):
+    except InvalidARL:
         await ctx.edit(
             content=('The Deezer ARL is not valid. '
                      'Please contact the developer or use a custom ARL.')
         )
     except TrackNotFound:
         await ctx.edit(
-            content='Track not found on Deezer ! Try using another ARL.'
+            content='Track not found on Deezer !'
         )
 
 
@@ -272,7 +265,7 @@ async def default_music_format(
     'country',
     type=discord.SlashCommandOptionType.string,
     description='Songs from this country should be more available.',
-    autocomplete=discord.utils.basic_autocomplete(get_countries()),
+    autocomplete=discord.utils.basic_autocomplete(arl_countries),
 )
 async def custom_arl(
     ctx: discord.ApplicationContext,
@@ -281,7 +274,12 @@ async def custom_arl(
     arl = get_arl(country)
     await ctx.respond("Give me a second !")
     if arl:
-        await change_settings(ctx.author.id, 'publicArl', arl)
+        iso_country = A_ISO3166[country]
+        await change_settings(
+            ctx.author.id,
+            'publicArl',
+            {'arl': arl, 'country': iso_country}
+        )
         load_arl(ctx.user.id, arl=arl, force=True)
         await ctx.edit(
             content=f'You are now using a Deezer ARL from {country} !'
@@ -298,7 +296,10 @@ async def custom_arl(
 )
 async def default_arl(ctx: discord.ApplicationContext) -> None:
     await ctx.respond("Give me a second !")
-    await change_settings(ctx.author.id, 'publicArl', ARL)
+    await change_settings(
+        ctx.author.id,
+        'publicArl', {"arl": ARL, "country": ARL_COUNTRY}
+    )
     load_arl(ctx.user.id, arl=ARL, force=True)
     await ctx.edit(content="You are now using the default ARL !")
 
@@ -344,7 +345,7 @@ class YTDLSource(Source):
         return cls(await discord.FFmpegOpusAudio.from_probe(
             filename,
             **ffmpeg_options,
-            ),
+        ),
             metadata
         )
 
@@ -538,35 +539,36 @@ async def play(
         try:
 
             # Connecting
-            arl = get_setting(
+            arl_info = get_setting(
                 ctx.author.id,
                 'publicArl',
-                ARL
+                g_arl_info
             )
-            dz = load_arl(ctx.user.id, arl)
+            dz = load_arl(ctx.user.id, arl_info['arl'])
             await ctx.edit(content=f'Getting the song...')
-        
+
             # Not an url ? Then get it !
             if is_url(query, sites=['spotify', 'deezer']):
                 url = query
             else:
                 url = get_song_url(query, dz=dz)
                 if not url:
-                    await ctx.edit(content='Track not found !')
+                    await ctx.edit(content='Track not found on Deezer !')
                     return
-            
+
             # Actual downloading
             downloadObjects, _ = init_dl(
                 url=url,
                 user_id=ctx.user.id,
-                arl=arl,
+                arl_info=arl_info,
                 brfm='flac',
                 settings=vc_settings
             )
             all_data = await download_links(
                 dz,
                 downloadObjects,
-                settings=vc_settings
+                settings=vc_settings,
+                ctx=ctx
             )
             info_dict = all_data[0]
             if not downloadObjects:
@@ -602,7 +604,7 @@ async def play(
 
         except TrackNotFound:
             await ctx.edit(
-                content='Track not found on Deezer ! Try using another ARL.'
+                content='Track not found on Deezer !'
             )
     else:
         ctx.respond('wut duh')
@@ -786,6 +788,5 @@ async def talk(
     message: str
 ) -> None:
     await ctx.send(message)
-
 
 bot.run(DEV_TOKEN)

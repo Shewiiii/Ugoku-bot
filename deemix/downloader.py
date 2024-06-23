@@ -34,6 +34,9 @@ from deemix.errors import DownloadFailed, MD5NotFound, DownloadCanceled, Preferr
 import discord
 from bot.timer import Timer
 from bot.exceptions import *
+from bot.arls import get_arl, get_countries,load_arl
+from bot.search import A_ISO3166, ISO3166
+
 
 logger = logging.getLogger('deemix')
 
@@ -232,10 +235,11 @@ class Downloader:
         all_data = []
         if not self.downloadObject.isCanceled:
             if isinstance(self.downloadObject, Single):
-                track, info_dict = await self.downloadWrapper({
-                    'trackAPI': self.downloadObject.single.get('trackAPI'),
-                    'albumAPI': self.downloadObject.single.get('albumAPI')
-                }, ctx=self.ctx)
+                track, info_dict = await self.downloadWrapper(
+                    {'trackAPI': self.downloadObject.single.get('trackAPI'),
+                    'albumAPI': self.downloadObject.single.get('albumAPI')}, 
+                    ctx=self.ctx
+                )
                 if 'error' in track:
                     raise TrackNotFound
                 if track: self.afterDownloadSingle(track)
@@ -495,7 +499,11 @@ class Downloader:
                     self.downloadObject.removeTrackProgress(self.listener)
                     track.filesizes['FILESIZE_FLAC'] = "0"
                     track.filesizes['FILESIZE_FLAC_TESTED'] = True
-                    return self.download(extraData, ctx, track)
+                    return self.download(
+                        extraData=extraData, 
+                        ctx=ctx, 
+                        track=track
+                    )
             self.log(itemData, "tagged")
         
         if ctx and self.timer:
@@ -532,16 +540,54 @@ class Downloader:
         }
 
         try:
-            result, info_dict = await self.download(extraData, ctx, track)
+            result, info_dict = await self.download(
+                extraData=extraData, 
+                ctx=ctx, 
+                track=track
+            )
         except DownloadFailed as error:
             if error.track:
+                if ctx:
+                    await ctx.edit(
+                        content=(
+                            'Track not available in the selected country, '
+                            'changing ARL ... '
+                            '(This can take a while, if you often see this '
+                            'message, consider using another ARL: `/set custom-arl`)'
+                        )
+                    )
+                ####### CHANGE ARL ######
+                countries = get_countries()
+                iso_countries = [A_ISO3166[c] for c in countries]
+                available = trackAPI['available_countries']
+                inter = list(set(iso_countries).intersection(available))
+                logged = False
+                while not logged and inter:
+                    chosen = inter.pop(-1)
+                    arl: str = get_arl(ISO3166[chosen])
+                    dz = load_arl(1, arl, force=True)
+                        
+                    if dz:
+                        logged = True
+                        self.dz = dz
+                if not logged and ctx:
+                    await ctx.edit(
+                        content=(
+                            'No valid ARL has been found. '
+                            'This should never happen. '
+                            'Please contact the developer.'
+                        )
+                    )
+                    raise NoARLFound
+                ###### END ######
+                    
                 track = error.track
                 if track.fallbackID != "0":
                     self.warn(itemData, error.errid, 'fallback')
                     newTrack = self.dz.gw.get_track_with_fallback(track.fallbackID)
                     newTrack = map_track(newTrack)
                     track.parseEssentialData(newTrack)
-                    return await self.downloadWrapper(extraData, track)
+                    return await self.downloadWrapper(extraData, ctx, track)
                 if len(track.albumsFallback) != 0 and self.settings['fallbackISRC']:
                     newAlbumID = track.albumsFallback.pop()
                     newAlbum = self.dz.gw.get_album_page(newAlbumID)
@@ -555,7 +601,7 @@ class Downloader:
                         newTrack = self.dz.gw.get_track_with_fallback(fallbackID)
                         newTrack = map_track(newTrack)
                         track.parseEssentialData(newTrack)
-                        return await self.downloadWrapper(extraData, track)
+                        return await self.downloadWrapper(extraData, ctx, track)
                 if not track.searched and self.settings['fallbackSearch']:
                     self.warn(itemData, error.errid, 'search')
                     searchedId = self.dz.api.get_track_id_from_metadata(track.mainArtist.name, track.title, track.album.title)
@@ -565,7 +611,7 @@ class Downloader:
                         track.parseEssentialData(newTrack)
                         track.searched = True
                         self.log(itemData, "searchFallback")
-                        return await self.downloadWrapper(extraData, track)
+                        return await self.downloadWrapper(extraData, ctx, track)
                 error.errid += "NoAlternative"
                 error.message = ErrorMessages[error.errid]
             result = {'error': {
@@ -574,14 +620,14 @@ class Downloader:
                 'data': itemData,
                 'type': "track"
             }}
-        except Exception as e:
-            logger.exception("%s %s", f"{itemData['artist']} - {itemData['title']}", e)
-            result = {'error': {
-                'message': str(e),
-                'data': itemData,
-                'stack': traceback.format_exc(),
-                'type': "track"
-            }}
+        # except Exception as e:
+        #     logger.exception("%s %s", f"{itemData['artist']} - {itemData['title']}", e)
+        #     result = {'error': {
+        #         'message': str(e),
+        #         'data': itemData,
+        #         'stack': traceback.format_exc(),
+        #         'type': "track"
+        #     }}
 
         if 'error' in result:
             self.downloadObject.completeTrackProgress(self.listener)

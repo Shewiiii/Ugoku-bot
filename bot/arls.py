@@ -2,17 +2,62 @@ from bs4 import BeautifulSoup
 import requests
 import discord
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+from deezer import Deezer
+from deemix.settings import load as loadSettings
+from deemix.plugins.spotify import Spotify
+from deemix.utils import formatListener
+
+class LogListener:
+    @classmethod
+    def send(cls, key, value=None):
+        logString = formatListener(key, value)
+        if logString:
+            print(logString)
 
 request = requests.get('https://rentry.org/firehawk52#deezer-arls')
 raw = BeautifulSoup(request.text, features="html.parser")
 url: str = 'https://rentry.org/firehawk52#deezer-arls'
 
 
+# ----------GLOBAL SETTINGS----------
+
+
+# env things
+load_dotenv()
+ARL = str(os.getenv('DEEZER_ARL'))
+ARL_COUNTRY = os.getenv('ARL_COUNTRY')
+
+config_path = Path('.') / 'deemix' / 'config'
+
+# Init settings
+settings = loadSettings(config_path)
+
+# Load deezer
+dz = Deezer()
+listener = LogListener()
+plugins = {
+    "spotify": Spotify(configFolder=config_path)
+}
+plugins["spotify"].setup()
+
+# Load account
+dz.login_via_arl(ARL)
+# country = get_account_country()
+
+# Init custom arl
+custom_arls = {}
+
+# ------------------------------------
+
+
 def simplified(country: str) -> str:
     try:
         # Japan/にっぽん to Japan
         return country[:country.index('/')]
-    except:
+    except ValueError:
         # France
         return country
 
@@ -52,3 +97,24 @@ def get_arl(country: str) -> str:
             c = simplified(c)
             if country == c:
                 return row.find('code').text
+
+
+def load_arl(
+    user_id: int | None,
+    arl: str | None,
+    force: bool = False
+) -> Deezer | None:
+    global custom_arls
+    global dz
+    if not arl:
+        return
+    elif arl == ARL:
+        return dz
+    elif user_id in custom_arls and not force:
+        return custom_arls[user_id]
+    else:
+        # New Deezer instance
+        new_dz = Deezer()
+        new_dz.login_via_arl(arl)
+        custom_arls[user_id] = new_dz
+        return new_dz

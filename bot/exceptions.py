@@ -4,3 +4,6 @@ class InvalidARL(Exception):
 
 class TrackNotFound(Exception):
     pass
+
+class NoARLFound(Exception):
+    pass
