@@ -24,11 +24,14 @@ link_grabber = (r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2"
 
 
 # Setup the folders
-sticker_path = Path('.') / 'output' / 'stickers'
+output_path = Path('.') / 'output'
+
+sticker_path = output_path / 'stickers'
 sticker_path.mkdir(parents=True, exist_ok=True)
 
-archives_path = Path('.') / 'archives' / 'stickers'
+archives_path = output_path / 'archives' / 'stickers'
 archives_path.mkdir(parents=True, exist_ok=True)
+
 
 def get_link(string: str) -> Path:
     return re.findall(
@@ -37,7 +40,7 @@ def get_link(string: str) -> Path:
 
 
 def get_stickerpack(
-    link: str,
+    link: str | None,
     gif: bool = True
 ) -> str:
     '''Get every sticker on a LINE Store page.
@@ -65,7 +68,7 @@ def get_stickerpack(
     # Setup the folders, path = sticker pack path
     path = sticker_path / pack_name
     path.mkdir(parents=True, exist_ok=True)
-    
+
     # Get html elements of the stickers
     stickers = raw.find_all(
         'li', {'class': 'FnStickerPreviewItem'}
@@ -98,6 +101,7 @@ def get_stickerpack(
     shutil.make_archive(archives_path / pack_name, 'zip', path)
 
     return (archives_path / f'{pack_name}.zip').absolute()
+
 
 if __name__ == "__main__":
     get_stickerpack('https://store.line.me/stickershop/product/1472670/en')
