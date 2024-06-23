@@ -6,7 +6,7 @@ import shutil
 import logging
 import os
 from apnggif import apnggif
-
+from bot.exceptions import IncorrectURL
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,18 +55,26 @@ def get_stickerpack(
         Create a folder with all the stickers on the page.
     '''
     # Setup
-    request = requests.get(link)
-    raw = BeautifulSoup(request.text, features="html.parser")
+    try:
+        request = requests.get(link)
+        raw = BeautifulSoup(request.text, features="html.parser")
 
-    # Pack name
-    pack_name = raw.find('p', {'data-test': 'sticker-name-title'}).text
+        # Pack name
+        pack_name = raw.find('p', {'data-test': 'sticker-name-title'}).text
+    except: # To precise :gura_sleep:
+        raise IncorrectURL
 
     # Remove weird characters
     for c in ['"', '?', ':', '/', '\\', '*', '<', '>', '|']:
         pack_name = pack_name.replace(c, ' ')
 
     # Setup the folders, path = sticker pack path
-    path = sticker_path / pack_name
+    if gif:
+        path = sticker_path / 'gif' / pack_name
+    else:
+        path = sticker_path / 'png' / pack_name
+
+    archive_path = archives_path / pack_name
     path.mkdir(parents=True, exist_ok=True)
 
     # Get html elements of the stickers
@@ -98,9 +106,13 @@ def get_stickerpack(
             )
             os.remove(f'{path}\\{i+1}.png')
 
-    shutil.make_archive(archives_path / pack_name, 'zip', path)
+    # Delete old ARCHIVE if there is
+    if os.path.isfile(f'{archive_path}.zip'):
+        os.remove(f'{archive_path}.zip')
+    # Final zip
+    shutil.make_archive(archive_path, 'zip', path)
 
-    return (archives_path / f'{pack_name}.zip').absolute()
+    return f'{archive_path.absolute()}.zip'
 
 
 if __name__ == "__main__":

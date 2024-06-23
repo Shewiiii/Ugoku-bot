@@ -110,7 +110,11 @@ async def stickers(
         )
     else:
         await ctx.respond(f'Give me a second !')
-        zip_file = get_stickerpack(url, gif=gif)
+        try:
+            zip_file = get_stickerpack(url, gif=gif)
+        except IncorrectURL:
+            await ctx.edit(content='Invalid URL ! Please check again.')
+            return
         await ctx.send(
             file=discord.File(zip_file),
             content=(f"Sorry for the wait <@{ctx.author.id}> ! "
@@ -151,7 +155,6 @@ async def songs(
         'publicArl',
         g_arl_info
     )
-    arl = arl_info['arl']
     # Not an url ? Then get it !
     if is_url(query, sites=['spotify', 'deezer']):
         url = query

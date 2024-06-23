@@ -7,3 +7,6 @@ class TrackNotFound(Exception):
 
 class NoARLFound(Exception):
     pass
+
+class IncorrectURL(Exception):
+    pass
