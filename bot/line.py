@@ -93,23 +93,29 @@ def get_stickerpack(
         link = get_link(stickers[i]['data-preview'])
         neko_arius = requests.get(link).content
 
-        with open(f'{path}\\{i+1}.png', 'wb') as png_file:
+        file = path / f'{i+1}.png'
+        with open(file, 'wb') as png_file:
             png_file.write(neko_arius)
 
     # Convert apngs to gif if wanted and if there are
     if gif and sticker_type in ['animation-sticker', 'popup-sticker']:
         for i in range(sticker_count):
+            file = path / f'{i+1}.png'
+            g_file = path / f'{i+1}.gif'
             apnggif(
-                png=f'{path}\\{i+1}.png',
-                gif=f'{path}\\{i+1}.gif',
+                png=file,
+                gif=g_file,
                 tlevel=255
             )
-            os.remove(f'{path}\\{i+1}.png')
+            os.remove(f'{path}/{i+1}.png')
 
     # Delete old ARCHIVE if there is
     if os.path.isfile(f'{archive_path}.zip'):
         os.remove(f'{archive_path}.zip')
     # Final zip
+    print(path)
+    print(path)
+    print(path)
     shutil.make_archive(archive_path, 'zip', path)
 
     return f'{archive_path.absolute()}.zip'
