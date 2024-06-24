@@ -1,10 +1,6 @@
 {
-    "defaultMusicFormat": {
-    },
-    "publicArl": {
-
-    },
-    "defaultVolume": {
-
-    }
+    "defaultMusicFormat": {},
+    "publicArl": {},
+    "defaultVolume": {},
+    "whitelistedServers": []
 }

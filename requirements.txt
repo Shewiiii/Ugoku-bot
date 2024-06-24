@@ -11,3 +11,4 @@ apnggif
 python-dotenv
 PyNaCl
 yt-dlp
+openai

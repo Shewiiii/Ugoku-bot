@@ -1,5 +1,5 @@
 import discord
-from discord.ui.item import Item
+from discord.ext import commands
 import yt_dlp
 import asyncio
 
@@ -15,7 +15,8 @@ from bot.settings import *
 from bot.arls import *
 from bot.timer import Timer
 from typing import Any
-from bot.search import get_song_url, is_url, ISO3166, A_ISO3166
+from bot.search import get_song_url, is_url, A_ISO3166
+from bot.chatbot import Chat, active_chats
 
 
 # From https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5
@@ -49,21 +50,27 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S',
 )
 
+# INIT BOT
+intents = discord.Intents.default()
+intents.message_content = True
+bot = discord.Bot(intents=intents)
 
+# VARIABLES
 load_dotenv()
-bot = discord.Bot()
 TOKEN = os.getenv('DISCORD_TOKEN')
 DEV_TOKEN = os.getenv('DEV_TOKEN')
 ARL = os.getenv('DEEZER_ARL')
 ARL_COUNTRY = os.getenv('ARL_COUNTRY')
+OWNER_ID = int(os.getenv('OWNER_ID'))
 g_arl_info = {'arl': ARL, 'country': ARL_COUNTRY}
 arl_countries = get_countries()
 
-
-vc_config_path = Path('.') / 'deemix' / 'vc_config'
+# Only for chatbot (for now)
+whitelisted_servers: list = get_whitelist()
 
 # VC deemix settings: ignore tags and download only the song itself
 # Init settings
+vc_config_path = Path('.') / 'deemix' / 'vc_config'
 vc_settings = loadSettings(vc_config_path)
 
 
@@ -793,8 +800,51 @@ async def talk(
 ) -> None:
     await ctx.send(message)
 
-################ HELP SECTION ################
 
+# @bot.command(
+#     name='debug',
+#     description='debug'
+# )
+# @discord.option(
+#     'code',
+#     type=discord.SlashCommandOptionType.string,
+# )
+# async def debug(
+#     ctx: discord.ApplicationContext,
+#     code: str
+# ) -> None:
+#     if ctx.author.id == OWNER_ID:
+#         await ctx.respond(eval(code))
+
+################ CHATBOT ################
+
+# So here I use the old method (Events) to make the chatbot, just because
+# It allows the bot to have a real chat just with that command
+
+
+def can_use_chatbot(message: discord.Message):
+    return (message.content.startswith("Ugoku")
+            and message.guild.id in whitelisted_servers)
+
+
+@bot.event
+async def on_message(
+    message: discord.Message
+) -> None:
+    if can_use_chatbot(message):
+        # Create a new chat if needed
+        if not message.guild.id in active_chats:
+            Chat(message.guild.id)
+
+        chat: Chat = active_chats[message.guild.id]
+        reply = chat.prompt(
+            user_msg=message.content[6:],
+            username=message.author.name
+        )
+        await message.channel.send(reply)
+
+
+################ HELP SECTION ################
 # EMBEDS
 general = discord.Embed(
     title='Help',
@@ -917,12 +967,15 @@ commands.add_field(
         '> \n'
         '> [/talk](http://example.com/) - *なに～* '
         '<:ugoku_yummy:1238139232913199105>\n'
+        '> \n'
+        '> [Ugoku](http://example.com/) - Try to start a sentence '
+        'with *Ugoku* !\n'
     ),
     inline=False
 )
+
+
 # VIEW/BUTTONS
-
-
 class MyView(discord.ui.View):
     @discord.ui.button(
         label="General",
@@ -942,9 +995,8 @@ class MyView(discord.ui.View):
             embed=commands
         )
 
+
 # COMMAND
-
-
 @bot.command(
     name='help',
     description='ﾁﾗｯ'
