@@ -15,7 +15,6 @@
   - Add a command to pop songs from queue list.
   - ...
 - Add a /meaning command, to search the meaning (+sentence/pitch accent/...) of a Japanese word.
-- Add info embeds.
 - Improve queue design.
 - Add download modes (eg. upload songs one by one for albums/playlists).
 - Auto detect the availability of a song and set an ARL from where the song is available.

@@ -113,9 +113,6 @@ def get_stickerpack(
     if os.path.isfile(f'{archive_path}.zip'):
         os.remove(f'{archive_path}.zip')
     # Final zip
-    print(path)
-    print(path)
-    print(path)
     shutil.make_archive(archive_path, 'zip', path)
 
     return f'{archive_path.absolute()}.zip'

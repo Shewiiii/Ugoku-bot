@@ -1,4 +1,5 @@
 import discord
+from discord.ui.item import Item
 import yt_dlp
 import asyncio
 
@@ -262,7 +263,7 @@ async def default_music_format(
 
 @set.command(
     name='custom-arl',
-    description='Change your Deezer localization.'
+    description='Change your Deezer location.'
 )
 @discord.option(
     'country',
@@ -682,7 +683,7 @@ async def clear(
         server_sessions[guild_id].queue = []
         if voice_client.is_playing():
             voice_client.stop()
-        await ctx.send('Queue cleared !')
+        await ctx.respond('Queue cleared !')
 
 
 @vc.command(
@@ -791,5 +792,167 @@ async def talk(
     message: str
 ) -> None:
     await ctx.send(message)
+
+################ HELP SECTION ################
+
+# EMBEDS
+general = discord.Embed(
+    title='Help',
+    description=('*Hello ! My name is Yur-, I mean Ugoku !'
+                 ' a bot created by Shewi ~ \n Always ready to help !*'),
+    color=discord.Colour.from_rgb(241, 219, 199),
+)
+general.add_field(
+    name='Sources',
+    value=(
+        '> - The character is **Yuruneko**, an OG character designed and '
+        'drawn by [しろなっぱ](https://x.com/shironappa_) (Shironappa). '
+        'Please support her ! \n'
+        '> - The music player code has been adapted from this '
+        '[github gist](https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5).\n'
+        '> - The bot has been coded using Pycord and Deemix. You can '
+        'find the code source '
+        '[here](https://github.com/Shewiiii/Ugoku-bot).'
+    )
+)
+general.add_field(
+    name='Features',
+    value=(
+        '> Ugoku ! can:\n'
+        '> - Download stickers from LINE\n'
+        '> - Download songs from Deezer, losslessly and from almost any '
+        'country\n'
+        '> - Play music in voice channels, with '
+        'the highest achievable audio quality (Opus 510 kbps '
+        'single-pass compression)\n'
+        '> - Play the audio of a video from Youtube in voice channels\n'
+        '> - Talk ?\n'
+        '> - ...And more to come !'
+    ),
+    inline=False
+)
+
+general.set_footer(text="ネコ・アリウスって呼んでもいいよ～")
+# footers can have icons too
+general.set_thumbnail(
+    url="https://cdn.discordapp.com/attachments/1193547778689863682/1254587281143234672/6.png?ex=667a08f4&is=6678b774&hm=8aebab3e7f0b6df7b2d2c2abb444e8d36a926ffce3e905e489763198245a7430&")
+general.set_image(url="")
+
+commands = discord.Embed(
+    title="Commands",
+    description='Here is the list of commands you can use.',
+    # Pycord provides a class with default colors you can choose from
+    color=discord.Colour.from_rgb(241, 219, 199),
+)
+commands.add_field(
+    name='Get',
+    value=(
+        '> [/get stickers](http://example.com/) - Uploads a sticker '
+        'pack from LINE, from a given LINE STORE URL. Animated PNGs are '
+        'converted to GIF by default.\n'
+        '> \n'
+        '> [/get songs](http://example.com/) - Uploads a song, with one '
+        'of the following available formats: MP3 128 kbps, MP3 320 kbps, '
+        'FLAC. Supports multiple URLs, but please note that if '
+        'the file size exceeds what is allowed by the server, the file '
+        'will not be sent.'
+    )
+)
+commands.add_field(
+    name='Set',
+    value=(
+        '> [/set default-music-format](http://example.com/) - '
+        'Defines the format in which you want to receive music files '
+        'by default.\n'
+        '> \n'
+        '> [/set default-arl](http://example.com/) - Changes your '
+        'Deezer location to the default one: France.\n'
+        '> \n'
+        '> [/set custom-arl](http://example.com/) - Changes your '
+        'Deezer location to an available country of your choice. '
+        'Useful if most of your music is geographically blocked in France. '
+        'Ugoku ! will automatically search for another location, but this '
+        'may take some time.'
+    ),
+    inline=False
+)
+commands.add_field(
+    name='Voice channels',
+    value=(
+        '> [/vc join](http://example.com/) - Invites Ugoku ! in your vc.\n'
+        '> \n'
+        '> [/vc play](http://example.com/) - Plays a song of your choice. '
+        'If a song is already playing, adds the song to queue.\n'
+        '> \n'
+        '> [/vc play-from-youtube](http://example.com/) - Plays the audio of '
+        'a video of your choice. If a song is already playing, adds the '
+        'video to queue.\n'
+        '> \n'
+        '> [/vc pause](http://example.com/) - Pauses the song.\n'
+        '> \n'
+        '> [/vc resume](http://example.com/) - Resumes the song.\n'
+        '> \n'
+        '> [/vc skip](http://example.com/) - Skips the currently playing '
+        'song.\n'
+        '> \n'
+        '> [/vc queue](http://example.com/) - Shows the queue of remaining '
+        'songs.\n'
+        '> \n'
+        '> [/vc remove](http://example.com/) - Removes a song in queue by '
+        'index (1, 2...).\n'
+        '> \n'
+        '> [/vc clear](http://example.com/) - Clears the queue and stops '
+        'current song.\n'
+        '> \n'
+        '> [/vc bitrate](http://example.com/) - Shows bitrate of the vc '
+        'you are in. Vc bitrate does not affect sound quality, as it '
+        'bypasses it.'
+    ),
+    inline=False
+)
+commands.add_field(
+    name='Miscellaneous',
+    value=(
+        '> [/ping](http://example.com/) - Shows the ping of Ugoku !\n'
+        '> \n'
+        '> [/talk](http://example.com/) - *なに～* '
+        '<:ugoku_yummy:1238139232913199105>\n'
+    ),
+    inline=False
+)
+# VIEW/BUTTONS
+
+
+class MyView(discord.ui.View):
+    @discord.ui.button(
+        label="General",
+        style=discord.ButtonStyle.secondary,
+    )
+    async def general_callback(self, button, interaction):
+        await interaction.response.edit_message(
+            embed=general
+        )
+
+    @discord.ui.button(
+        label="Commands",
+        style=discord.ButtonStyle.secondary,
+    )
+    async def commands_callback(self, button, interaction):
+        await interaction.response.edit_message(
+            embed=commands
+        )
+
+# COMMAND
+
+
+@bot.command(
+    name='help',
+    description='ﾁﾗｯ'
+)
+async def help(ctx: discord.ApplicationContext):
+    await ctx.respond(
+        embed=general,
+        view=MyView()
+    )
 
 bot.run(DEV_TOKEN)
