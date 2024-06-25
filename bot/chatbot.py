@@ -44,26 +44,28 @@ memory_prompt = [
 ]
 
 
-shortener_prompt = [
-    {
-        "role": "user",
-        "content": (
-            "Only take the key words of this message, in English. "
-            "Max: 100 characters"
-            "Keep the names in native language !"
-        )
-    }
-]
+def shortener_prompt(username: str) -> list:
+    return [
+        {
+            "role": "user",
+            "content": (
+                "Only take the key words of this message, in English, "
+                "except the names, keep the names as is in its language."
+                f"The message is answering {username}"
+                "use less than 50 characters"
+            )
+        }
+    ]
 
 
-def shorter(reply: str) -> str | None:
+def shorter(reply: str, username: str) -> str | None:
     reauest = openai.chat.completions.create(
         model="gpt-3.5-turbo-0125",
         messages=[{
             "role": "user",
             "content": reply
         }
-        ]+shortener_prompt,
+        ]+shortener_prompt(username),
         n=1
     )
     shortened = reauest.choices[0].message.content
@@ -102,7 +104,8 @@ class Chat():
 
         # Manage message list
         self.slice_msg(last=10)
-        if len(self.old_messages) % 10 == 4:
+        # Rest has to be odd
+        if len(self.old_messages) % 10 == 5:
             self.memorize()
 
         chat = openai.chat.completions.create(
@@ -121,13 +124,14 @@ class Chat():
             self.messages.append(
                 {
                     "role": "assistant",
-                    "content": '[Summary]' + shorter(reply)
+                    "content": '[Summary]' + shorter(reply, username)
                 }
             )
             return reply
 
     def slice_msg(self, last: int = 10) -> None:
         # Remember the last x messages (default: 10)
+        # System prompt included
         while len(self.messages) > last:
             self.old_messages.append(self.messages.pop(0))
 
