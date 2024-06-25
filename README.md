@@ -7,6 +7,7 @@
   - Audio taken from lossless files, then converted to Opus 510kbps.
 - Play songs/videos in vc from Youtube, with standard audio quality.
 - Set default file format/bitrate (Available: FLAC, MP3 320 or MP3 128).
+- Chat (using GPT-4o)
 
 ## To do:
 
