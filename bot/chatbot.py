@@ -22,11 +22,12 @@ sys_prompt = [{
         "by Shewi (a boy)."
         "Always stay in your character no matter what."
         "Never use emotes."
-        "just talk as casually and Colloquial as possible, "
-        "dont ask to help."
+        "Just talk as casually and Colloquial as possible, "
+        "Dont ask to help, but do it if asked."
         "ALWAYS, always answer in the same language as the person "
         "you're talking to (mainly English)!"
-        "NEVER use LATEX and ALWAYS write in normal text."
+        "ALWAYS write in natural/plain text."
+        "Never say the info of the message in brackets !"
     )
 }]
 
@@ -43,11 +44,38 @@ memory_prompt = [
 ]
 
 
+shortener_prompt = [
+    {
+        "role": "user",
+        "content": (
+            "Only take the key words of this message, in English. "
+            "Max: 100 characters"
+            "Keep the names in native language !"
+        )
+    }
+]
+
+
+def shorter(reply: str) -> str | None:
+    reauest = openai.chat.completions.create(
+        model="gpt-3.5-turbo-0125",
+        messages=[{
+            "role": "user",
+            "content": reply
+        }
+        ]+shortener_prompt,
+        n=1
+    )
+    shortened = reauest.choices[0].message.content
+    if shortened:
+        return shortened
+
+
 class Chat():
     def __init__(self, id: int) -> None:
         self.messages: list = []
         self.old_messages: list = []
-        self.old_memory: list = []
+        self.memory: list = []
         self.id = id
         active_chats[id] = self
         self.last_prompt: datetime | None = None
@@ -59,36 +87,41 @@ class Chat():
         username: str
     ) -> str | None:
         # Stats
-        self.last_prompt = datetime.now()
+        self.last_prompt = datetime.now().strftime("%m/%d/%Y, %H:%M")
         self.count += 1
 
         self.messages.append(
             {
                 "role": "user",
-                "content": f'({username} talking) {user_msg}'
+                "content": (
+                    f'[{self.last_prompt}-'
+                    f'{username} talking] {user_msg}'
+                )
             }
         )
 
         # Manage message list
         self.slice_msg(last=10)
-        if len(self.old_messages) % 5 == 1:
+        if len(self.old_messages) % 10 == 4:
             self.memorize()
 
         chat = openai.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-4o-2024-05-13",
             messages=(
                 sys_prompt
-                + self.old_memory
+                + self.memory
                 + self.messages
             ),
             n=1
         )
         reply = chat.choices[0].message.content
         if reply:
+            # To be sure the "[Summary]" goes away
+            reply = reply.replace('[Summary]', '')
             self.messages.append(
                 {
                     "role": "assistant",
-                    "content": reply
+                    "content": '[Summary]' + shorter(reply)
                 }
             )
             return reply
@@ -100,21 +133,21 @@ class Chat():
 
     def memorize(self) -> None:
         memo = openai.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-3.5-turbo-0125",
             messages=self.old_messages+memory_prompt,
             n=1
         )
         reply = 'Old chat, your memory: ' + memo.choices[0].message.content
-        self.old_memory = [{
+        self.memory = [{
             "role": "system",
             "content": reply
         }]
 
     def reset_chat(self):
-        self.messages = sys_prompt(self.id)
+        self.messages = []
         self.old_messages = []
-        self.old_memory = []
+        self.memory = []
 
 
 if __name__ == '__main__':
-    chat = Chat('Shewi')
+    chat = Chat(1)
