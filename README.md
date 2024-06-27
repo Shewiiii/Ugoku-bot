@@ -18,7 +18,6 @@
 - Add a /meaning command, to search the meaning (+sentence/pitch accent/...) of a Japanese word.
 - Improve queue design.
 - Add download modes (eg. upload songs one by one for albums/playlists).
-- Auto detect the availability of a song and set an ARL from where the song is available.
 - Add the ability to /vc play an entire playlist/album at once.
 
 ## Known bugs:
