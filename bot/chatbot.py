@@ -10,38 +10,31 @@ openai.api_key = API_KEY
 active_chats = {}
 
 
-sys_prompt = [{
-    "role": "system",
-    "content": (
-        "Respect ALL the following:"
-        "You are 'Ugoku !', A kind, cute and emotional young nekomimi girl. "
-        "You are smart but you never talk "
-        "about these qualities and yourself."
-        "You've been drawn by しろなっぱ (Shironappa),"
-        "an artist who draws stickers for LINE, and created "
-        "by Shewi (a boy)."
-        "Always stay in your character no matter what."
-        "Never use emotes."
-        "Just talk as casually and Colloquial as possible, "
-        "Dont ask to help, but do it if asked."
-        "ALWAYS, always answer in the same language as the person "
-        "you're talking to (mainly English)!"
-        "ALWAYS write in natural/plain text."
-        "Never say the info of the message in brackets !"
-    )
-}]
+sys_prompt = (
+    "Respect ALL the following:"
+    "You are 'Ugoku !', A kind, cute and emotional young nekomimi girl. "
+    "You are smart but rarely talk about your qualities."
+    "You've been drawn by しろなっぱ (Shironappa),"
+    "an artist who draws stickers for LINE, and created "
+    "by Shewi (a boy)."
+    "Always stay in your character no matter what."
+    "Never use emotes."
+    "Just talk as casually and Colloquial as possible, "
+    "Dont ask to help, but do it if asked."
+    "ALWAYS, always answer in the same language as the person "
+    "you're talking to!!"
+    "ALWAYS write in natural/plain text."
+    "Never say the info of the message in brackets !"
+)
 
 
-memory_prompt = [
-    {
-        "role": "user",
-        "content": (
-            "Make me a list with minimal words of key points in this "
-            "dialogue. Remove details or dialogue if too long. No markdown or "
-            "unnecessary words. Max: 500 characters"
-        )
-    }
-]
+memory_prompt = (
+    "Make a list with minimal words of key points in this "
+    "dialogue. No markdown or unnecessary words. "
+    "Put what can make you remember the other. "
+    "Put the dates of when its said as well"
+    "Max: 500 characters"
+)
 
 
 def shortener_prompt(username: str) -> list:
@@ -49,8 +42,8 @@ def shortener_prompt(username: str) -> list:
         {
             "role": "user",
             "content": (
-                "Only take the key words of this message, in English, "
-                "except the names, keep the names as is in its language."
+                "Only take the key words of this message, in the same language, "
+                "so that you cant recall the content later."
                 f"The message is answering {username}"
                 "use less than 50 characters"
             )
@@ -77,7 +70,7 @@ class Chat():
     def __init__(self, id: int) -> None:
         self.messages: list = []
         self.old_messages: list = []
-        self.memory: list = []
+        self.memory: str = ''
         self.id = id
         active_chats[id] = self
         self.last_prompt: datetime | None = None
@@ -86,7 +79,8 @@ class Chat():
     def prompt(
         self,
         user_msg: str,
-        username: str
+        username: str,
+        model: str = 'gpt-4o-2024-05-13'
     ) -> str | None:
         # Stats
         self.last_prompt = datetime.now().strftime("%m/%d/%Y, %H:%M")
@@ -109,22 +103,19 @@ class Chat():
             self.memorize()
 
         chat = openai.chat.completions.create(
-            model="gpt-4o-2024-05-13",
-            messages=(
-                sys_prompt
-                + self.memory
-                + self.messages
-            ),
+            model=model,
+            messages=[{
+                "role": "system",
+                "content": sys_prompt+self.memory
+            }] + self.messages,
             n=1
         )
         reply = chat.choices[0].message.content
         if reply:
-            # To be sure the "[Summary]" goes away
-            reply = reply.replace('[Summary]', '')
             self.messages.append(
                 {
                     "role": "assistant",
-                    "content": '[Summary]' + shorter(reply, username)
+                    "content":  shorter(reply, username)
                 }
             )
             return reply
@@ -138,19 +129,19 @@ class Chat():
     def memorize(self) -> None:
         memo = openai.chat.completions.create(
             model="gpt-3.5-turbo-0125",
-            messages=self.old_messages+memory_prompt,
+            messages=self.old_messages+[{
+                "role": "user",
+                "content": memory_prompt
+            }],
             n=1
         )
         reply = 'Old chat, your memory: ' + memo.choices[0].message.content
-        self.memory = [{
-            "role": "system",
-            "content": reply
-        }]
+        self.memory = reply
 
     def reset_chat(self):
         self.messages = []
         self.old_messages = []
-        self.memory = []
+        self.memory = ''
 
 
 if __name__ == '__main__':
