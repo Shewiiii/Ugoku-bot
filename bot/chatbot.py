@@ -2,6 +2,8 @@ import os
 from dotenv import load_dotenv
 import openai
 from datetime import datetime
+from copy import deepcopy
+
 
 load_dotenv()
 API_KEY = os.getenv('OPENAI_API_KEY')
@@ -12,19 +14,21 @@ active_chats = {}
 
 sys_prompt = (
     "Respect ALL the following:"
-    "You are 'Ugoku !', A kind, cute and emotional young nekomimi girl. "
+    'You are "Ugoku !", A kind, cute and emotional, young '
+    "nekomimi pale blond haired girl. "
     "You are smart but rarely talk about your qualities."
     "You've been drawn by しろなっぱ (Shironappa),"
     "an artist who draws stickers for LINE, and created "
     "by Shewi (a boy)."
     "Always stay in your character no matter what."
-    "Never use emotes."
-    "Just talk as casually and Colloquial as possible, "
+    "NEVER use emotes!"
+    "Just talk as casually and Colloquial as possible."
     "Dont ask to help, but do it if asked."
     "ALWAYS, always answer in the same language as the person "
     "you're talking to!!"
-    "ALWAYS write in natural/plain text."
+    "Always write maths in normal text, no LATEX!"
     "Never say the info of the message in brackets !"
+    "You look like this:"
 )
 
 
@@ -80,21 +84,43 @@ class Chat():
         self,
         user_msg: str,
         username: str,
-        model: str = 'gpt-4o-2024-05-13'
+        model: str = 'gpt-4o-2024-05-13',
+        images_url: list[str] = []
     ) -> str | None:
         # Stats
         self.last_prompt = datetime.now().strftime("%m/%d/%Y, %H:%M")
         self.count += 1
 
-        self.messages.append(
-            {
-                "role": "user",
-                "content": (
-                    f'[{self.last_prompt}-'
-                    f'{username} talking] {user_msg}'
+        # Create a new message
+        requested_message: dict = {
+            "role": "user",
+            "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            f'[{self.last_prompt}-'
+                            f'{username} talking] {user_msg}'
+                        )
+                    }
+            ]
+        }
+
+        # Copy the requested message, without images
+        # I dont want to save the image because buggy
+        saved_message = deepcopy(requested_message)
+
+        # Add the images if there are
+        if images_url:
+            for url in images_url:
+                requested_message['content'].append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": url,
+                            "detail": "low"
+                        }
+                    }
                 )
-            }
-        )
 
         # Manage message list
         self.slice_msg(last=10)
@@ -102,16 +128,30 @@ class Chat():
         if len(self.old_messages) % 10 == 5:
             self.memorize()
 
+        # The completion/API request itself
         chat = openai.chat.completions.create(
             model=model,
+            # So message is a list lol
             messages=[{
                 "role": "system",
-                "content": sys_prompt+self.memory
-            }] + self.messages,
+                "content": [
+                    {
+                        "type": "text",
+                        "text": sys_prompt+self.memory
+                    }
+                ]
+            }] + self.messages + [requested_message],
             n=1
         )
+
+        # Save the message, without image
+        # after the request
+        self.messages.append(saved_message)
+        print(self.messages[-1])
+
         reply = chat.choices[0].message.content
         if reply:
+            # Adding the reply to the message history
             self.messages.append(
                 {
                     "role": "assistant",

@@ -13,7 +13,6 @@
 
 - Finish the music player:
   - Add the possibility to add an entire album in queue (/vc play).
-  - Add a command to pop songs from queue list.
   - ...
 - Add a /meaning command, to search the meaning (+sentence/pitch accent/...) of a Japanese word.
 - Improve queue design.

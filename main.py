@@ -678,6 +678,33 @@ async def show_queue(ctx: discord.ApplicationContext):
 
 
 @vc.command(
+    name='remove',
+    description='Remove a song in queue.'
+)
+@discord.option(
+    'index',
+    type=discord.SlashCommandOptionType.integer,
+    description=' Index of the song in the queue (1, 2...).'
+)
+async def remove(
+    ctx: discord.ApplicationContext,
+    index: int
+) -> None:
+    id = ctx.guild.id
+    if ctx.guild.id in server_sessions:
+        if index == 0:
+            await ctx.respond(
+                "You can't skip the current song ! "
+                "Try to use /skip ~"
+            )
+        elif index >= len(server_sessions[id].queue):
+            await ctx.respond(f'https://tenor.com/view/chocola-nekopara-hnzk-gif-26103729 ')
+        else:
+            removed = server_sessions[id].queue.pop(index)
+            await ctx.respond(f'Removed {removed} from queue !')
+
+
+@vc.command(
     name='clear',
     description='Clear the queue and stop current song.'
 )
@@ -701,9 +728,8 @@ async def leave(
 ):
     guild_id = ctx.guild.id
     if guild_id in server_sessions:
-        voice_client = server_sessions[guild_id].voice_client
-        await voice_client.disconnect()
-        voice_client.cleanup()
+        voice_client: discord.voice_client.VoiceClient = server_sessions[guild_id].voice_client
+        print(voice_client.user)
         del server_sessions[guild_id]
         await ctx.respond(f'Baibai !')
 
@@ -765,7 +791,7 @@ async def play_from_youtube(
 
     # if not a valid URL, do search and play the first video in search result
     except (requests.exceptions.InvalidURL, requests.exceptions.MissingSchema):
-        query_string = urllib.parse.urlencode({"search_query": query})
+        query_string = urllib.parse.ncode({"search_query": query})
         formatUrl = urllib.request.urlopen(
             "https://www.youtube.com/results?" + query_string)
         search_results = re.findall(
@@ -801,29 +827,28 @@ async def talk(
     await ctx.send(message)
 
 
-# @bot.command(
-#     name='debug',
-#     description='debug'
-# )
-# @discord.option(
-#     'code',
-#     type=discord.SlashCommandOptionType.string,
-# )
-# async def debug(
-#     ctx: discord.ApplicationContext,
-#     code: str
-# ) -> None:
-#     if ctx.author.id == OWNER_ID:
-#         await ctx.respond(eval(code))
+@bot.command(
+    name='debug',
+    description='debug'
+)
+@discord.option(
+    'code',
+    type=discord.SlashCommandOptionType.string,
+)
+async def debug(
+    ctx: discord.ApplicationContext,
+    code: str
+) -> None:
+    if ctx.author.id == OWNER_ID:
+        await ctx.respond(eval(code))
 
 ################ CHATBOT ################
 
 # So here I use the old method (Events) to make the chatbot, just because
-# It allows the bot to have a real chat just with that command
 
 
 def can_use_chatbot(message: discord.Message):
-    return (message.content.startswith("Ugoku")
+    return (message.content.startswith('-')
             and message.guild.id in whitelisted_servers)
 
 
@@ -831,15 +856,43 @@ def can_use_chatbot(message: discord.Message):
 async def on_message(
     message: discord.Message
 ) -> None:
+    images_url = []
     if can_use_chatbot(message):
+        processed_message = message.content
         # Create a new chat if needed
         if not message.guild.id in active_chats:
             Chat(message.guild.id)
-
         chat: Chat = active_chats[message.guild.id]
+        
+        # IMAGE
+        if message.attachments:
+            # Grab the link of the images
+            for attachment in message.attachments:
+                if "image" in attachment.content_type:
+                    images_url.append(attachment.url)
+        
+        # EMOTES
+        # Only grabs the first emote, would be too expensive otherwise..
+        has_emote = False
+        result: re.Match = re.search('<(.+?)>', processed_message)
+        if result:
+            emote = result.group(0)
+            nums = re.findall(r'\d+', emote)
+            name: re.Match = re.search(':(.+?):', processed_message)
+            if nums:
+                snowflake = nums[-1]
+                processed_message = processed_message.replace(emote, name.group(0))
+                has_emote = True
+
+        if has_emote:
+            url = f'https://cdn.discordapp.com/emojis/{snowflake}.png'
+            images_url.append(url)
+
+        # REPLY
         reply = chat.prompt(
-            user_msg=message.content[6:],
-            username=message.author.name
+            user_msg=processed_message[1:],
+            username=message.author.display_name,
+            images_url=images_url
         )
         await message.channel.send(reply)
 
@@ -954,6 +1007,8 @@ commands.add_field(
         '> [/vc clear](http://example.com/) - Clears the queue and stops '
         'current song.\n'
         '> \n'
+        '> [/vc leave](http://example.com/) - Leave Ugoku ! from the vc.\n'
+        '> \n'
         '> [/vc bitrate](http://example.com/) - Shows bitrate of the vc '
         'you are in. Vc bitrate does not affect sound quality, as it '
         'bypasses it.'
@@ -969,7 +1024,7 @@ commands.add_field(
         '<:ugoku_yummy:1238139232913199105>\n'
         '> \n'
         '> [Ugoku](http://example.com/) - Try to start a sentence '
-        'with *Ugoku* !\n'
+        'with - !\n'
     ),
     inline=False
 )

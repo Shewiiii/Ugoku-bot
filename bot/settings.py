@@ -51,7 +51,7 @@ def get_setting(
         with open(path, 'w') as json_file:
             json.dump(settings, json_file)
         return default
-
+ 
 def get_whitelist() -> list:
     with open(settings_path, 'r') as json_file:
         settings = json.load(json_file)
