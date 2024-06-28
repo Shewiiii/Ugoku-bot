@@ -20,6 +20,7 @@ sys_prompt = (
     "You've been drawn by しろなっぱ (Shironappa),"
     "an artist who draws stickers for LINE, and created "
     "by Shewi (a boy)."
+    "DON'T summarize your messages."
     "Always stay in your character no matter what."
     "NEVER use emotes!"
     "Just talk as casually and Colloquial as possible."
@@ -46,10 +47,11 @@ def shortener_prompt(username: str) -> list:
         {
             "role": "user",
             "content": (
-                "Only take the key words of this message, in the same language, "
-                "so that you cant recall the content later."
-                f"The message is answering {username}"
-                "use less than 50 characters"
+                "Shorter the message as much as possible, "
+                "in the same language, remove details, but not too "
+                "much so that you cant recall the content later."
+                f"The message is answering {username}."
+                "Use less than 50 characters"
             )
         }
     ]
