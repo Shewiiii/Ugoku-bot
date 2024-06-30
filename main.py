@@ -7,6 +7,8 @@ import urllib
 import re
 import logging
 import os
+from time import sleep, gmtime
+from datetime import datetime
 from dotenv import load_dotenv
 from bot.line import get_stickerpack
 from bot.downloader import *
@@ -729,7 +731,7 @@ async def leave(
     guild_id = ctx.guild.id
     if guild_id in server_sessions:
         voice_client: discord.voice_client.VoiceClient = server_sessions[guild_id].voice_client
-        print(voice_client.user)
+        await voice_client.disconnect()
         del server_sessions[guild_id]
         await ctx.respond(f'Baibai !')
 
@@ -828,6 +830,42 @@ async def talk(
 
 
 @bot.command(
+    name='timer',
+    description=(
+        'Add a second timer until a chosen date. '
+        'Live for the moment !'
+    )
+)
+async def timer(
+    ctx: discord.ApplicationContext,
+    name: str,
+    utc: int,
+    year: int,
+    month: int,
+    day: int,
+    hour: int,
+    minute: int,
+) -> None:
+    # Default UTC is +2
+    try:
+        date = datetime(year, month, day, hour+(utc-2), minute)
+        await ctx.respond('Timer set !')
+        now = datetime.now()
+        while date > now:
+            delta = date - now
+            await ctx.edit(
+                content=f'{name}: {delta.seconds} seconds remaining.'
+            )
+            sleep(0.8)
+            now = datetime.now()
+        await ctx.respond(
+            f"<@{ctx.author.id}> Time's up ! ( ^^) _旦~~"
+        )
+    except ValueError as e:
+        await ctx.respond(f'Error, {e} !')
+
+
+@bot.command(
     name='debug',
     description='debug'
 )
@@ -863,14 +901,14 @@ async def on_message(
         if not message.guild.id in active_chats:
             Chat(message.guild.id)
         chat: Chat = active_chats[message.guild.id]
-        
+
         # IMAGE
         if message.attachments:
             # Grab the link of the images
             for attachment in message.attachments:
                 if "image" in attachment.content_type:
                     images_url.append(attachment.url)
-        
+
         # EMOTES
         # Only grabs the first emote, would be too expensive otherwise..
         has_emote = False
@@ -881,7 +919,8 @@ async def on_message(
             name: re.Match = re.search(':(.+?):', processed_message)
             if nums:
                 snowflake = nums[-1]
-                processed_message = processed_message.replace(emote, name.group(0))
+                processed_message = processed_message.replace(
+                    emote, name.group(0))
                 has_emote = True
 
         if has_emote:
@@ -1019,6 +1058,9 @@ commands.add_field(
     name='Miscellaneous',
     value=(
         '> [/ping](http://example.com/) - Shows the ping of Ugoku !\n'
+        '> \n'
+        '> [/timer](http://example.com/) - Add a second timer '
+        'until a chosen date. Live for the moment !\n'
         '> \n'
         '> [/talk](http://example.com/) - *なに～* '
         '<:ugoku_yummy:1238139232913199105>\n'
