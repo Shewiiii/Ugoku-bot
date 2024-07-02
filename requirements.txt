@@ -12,3 +12,5 @@ python-dotenv
 PyNaCl
 yt-dlp
 openai
+zotify @ git+https://zotify.xyz/zotify/zotify.git
+pandas

@@ -19,6 +19,7 @@ from bot.timer import Timer
 from typing import Any
 from bot.search import get_song_url, is_url, A_ISO3166
 from bot.chatbot import Chat, active_chats
+from bot.spotify import SpotifyDownloader
 
 
 # From https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5
@@ -65,6 +66,7 @@ ARL = os.getenv('DEEZER_ARL')
 ARL_COUNTRY = os.getenv('ARL_COUNTRY')
 OWNER_ID = int(os.getenv('OWNER_ID'))
 g_arl_info = {'arl': ARL, 'country': ARL_COUNTRY}
+sd = SpotifyDownloader()
 arl_countries = get_countries()
 
 # Only for chatbot (for now)
@@ -381,24 +383,24 @@ class ServerSession:
         # Currently playing
         # Youtube
         if self.queue[0]['source'] == 'Youtube':
-            elements = [
-                f"Currently playing: {self.queue[0]['element']}\n"
-            ]
-        # Deezer
+            title = self.queue[0]['element']
+        # Deezer or Spotify
         else:
-            elements = [
-                ("Currently playing: "
-                 f"{self.queue[0]['element']['display_name']}\n")
-            ]
+            title = self.queue[0]['element']['display_name']
+        elements = [
+            "Currently playing: "
+            f"{title} ({self.queue[0]['source']})\n"
+        ]
 
         # The actual list
         for i, s in enumerate(self.queue[1:], start=1):
             # Youtube
             if s['source'] == 'Youtube':
-                elements.append(f"{i}. {s['element']}\n")
-            # Deezer
+                title = s['element']
+            # Deezer or Spotify
             else:
-                elements.append(f"{i}. {s['element']['display_name']}\n")
+                title = s['element']['display_name']
+            elements.append(f"{i}. {title} ({s['source']})\n")
 
         return ''.join(elements)
 
@@ -534,6 +536,94 @@ async def join(
         await ctx.edit(content=f'Failed to connect to voice channel {ctx.user.voice.channel.name}.')
 
 
+async def connect(ctx: discord.ApplicationContext) -> ServerSession:
+    guild_id = ctx.guild.id
+    if guild_id not in server_sessions or not ctx.user.voice:
+        # not connected to any VC
+        if ctx.user.voice is None:
+            await ctx.edit(
+                content=f'You are not connected to any voice channel !'
+            )
+            return
+        else:
+            session: ServerSession = await join(
+                ctx,
+                ctx.user.voice.channel,
+                predecessor=True
+            )
+
+    else:  # is connected to a VC
+        session = server_sessions[guild_id]
+        if session.voice_client.channel != ctx.user.voice.channel:
+            # connected to a different VC than the command issuer
+            # (but within the same server)
+            await session.voice_client.move_to(ctx.user.voice.channel)
+            await ctx.send(f'Connected to {ctx.user.voice.channel}.')
+
+    return session
+
+
+async def play_deezer(ctx: discord.ApplicationContext, query: str) -> None:
+    await ctx.respond(f'Connecting to Deezer...')
+    if query:
+        # Connecting
+        arl_info = get_setting(
+            ctx.author.id,
+            'publicArl',
+            g_arl_info
+        )
+        dz = load_arl(ctx.user.id, arl_info['arl'])
+        await ctx.edit(content=f'Getting the song...')
+
+        # Not an url ? Then get it !
+        if is_url(query, sites=['spotify', 'deezer']):
+            url = query
+        else:
+            url = get_song_url(query, dz=dz)
+            if not url:
+                raise TrackNotFound
+
+        # Actual downloading
+        downloadObjects, _ = init_dl(
+            url=url,
+            user_id=ctx.user.id,
+            arl_info=arl_info,
+            brfm='flac',
+            settings=vc_settings
+        )
+        all_data = await download_links(
+            dz,
+            downloadObjects,
+            settings=vc_settings,
+            ctx=ctx
+        )
+        info_dict = all_data[0]
+        if not downloadObjects:
+            raise TrackNotFound
+
+        # Join
+        session: ServerSession = await connect(ctx)
+
+        await session.add_to_queue(ctx, info_dict, source='Deezer')
+        if not session.voice_client.is_playing() and len(session.queue) <= 1:
+            await session.start_playing(ctx)
+
+
+async def play_spotify(ctx: discord.ApplicationContext, url: str) -> None:
+    await ctx.respond('Give me a second !')
+    # Connect
+    session: ServerSession = await connect(ctx)
+    # Problem: have to wait to dl EVERYTHING before playing
+    all_data = sd.from_url(url)
+    first_info_dict = all_data.pop(0)
+    await session.add_to_queue(ctx, first_info_dict, source='Spotify')
+    if not session.voice_client.is_playing() and len(session.queue) <= 1:
+        await session.start_playing(ctx)
+
+    for info_dict in all_data:
+        await session.add_to_queue(ctx, info_dict, source='Spotify')
+
+
 @vc.command(
     name='play',
     description='Select a song to play.'
@@ -541,86 +631,38 @@ async def join(
 @discord.option(
     'query',
     type=discord.SlashCommandOptionType.string,
-    description='Deezer/Spotify URL or a search query of a song.'
+    description='Deezer (if source)/Spotify URL or a search query of a song.'
+)
+@discord.option(
+    'source',
+    type=discord.SlashCommandOptionType.string,
+    description='Source of the song (Deezer: better audio, Spotify: better library).',
+    autocomplete=discord.utils.basic_autocomplete(
+        ['Deezer', 'Spotify']),
 )
 async def play(
     ctx: discord.ApplicationContext,
-    query: str
+    query: str,
+    source: str
 ) -> None:
-    await ctx.respond(f'Connecting to Deezer...')
-    if query:
+    if source == 'Deezer':
         try:
-
-            # Connecting
-            arl_info = get_setting(
-                ctx.author.id,
-                'publicArl',
-                g_arl_info
-            )
-            dz = load_arl(ctx.user.id, arl_info['arl'])
-            await ctx.edit(content=f'Getting the song...')
-
-            # Not an url ? Then get it !
-            if is_url(query, sites=['spotify', 'deezer']):
-                url = query
-            else:
-                url = get_song_url(query, dz=dz)
-                if not url:
-                    await ctx.edit(content='Track not found on Deezer !')
-                    return
-
-            # Actual downloading
-            downloadObjects, _ = init_dl(
-                url=url,
-                user_id=ctx.user.id,
-                arl_info=arl_info,
-                brfm='flac',
-                settings=vc_settings
-            )
-            all_data = await download_links(
-                dz,
-                downloadObjects,
-                settings=vc_settings,
-                ctx=ctx
-            )
-            info_dict = all_data[0]
-            if not downloadObjects:
-                raise TrackNotFound
-
-            # Join
-            guild_id = ctx.guild.id
-            if guild_id not in server_sessions or not ctx.user.voice:
-                # not connected to any VC
-                if ctx.user.voice is None:
-                    await ctx.edit(
-                        content=f'You are not connected to any voice channel !'
-                    )
-                    return
-                else:
-                    session: ServerSession = await join(
-                        ctx,
-                        ctx.user.voice.channel,
-                        predecessor=True
-                    )
-
-            else:  # is connected to a VC
-                session = server_sessions[guild_id]
-                if session.voice_client.channel != ctx.user.voice.channel:
-                    # connected to a different VC than the command issuer
-                    # (but within the same server)
-                    await session.voice_client.move_to(ctx.user.voice.channel)
-                    await ctx.send(f'Connected to {ctx.user.voice.channel}.')
-
-            await session.add_to_queue(ctx, info_dict)
-            if not session.voice_client.is_playing() and len(session.queue) <= 1:
-                await session.start_playing(ctx)
-
+            await play_deezer(ctx, query)
         except TrackNotFound:
             await ctx.edit(
                 content='Track not found on Deezer !'
             )
+
+    elif source == 'Spotify':
+        try:
+            await play_spotify(ctx, query)
+        except FileNotFoundError as e:
+            await ctx.edit(content='Invalid URL ! Please try again.')
+            print(e)
+            print(e)
+            print(e)
     else:
-        ctx.respond('wut duh')
+        await ctx.respond('wut duh')
 
 
 @vc.command(
@@ -673,10 +715,9 @@ async def skip(ctx: discord.ApplicationContext):
 async def show_queue(ctx: discord.ApplicationContext):
     guild_id = ctx.guild.id
     if guild_id in server_sessions:
-        print('queue:', server_sessions[guild_id].display_queue())
-        await ctx.respond(
-            f'{server_sessions[guild_id].display_queue()}'
-        )
+        session: ServerSession = server_sessions[guild_id]
+        print('queue:', session.display_queue())
+        await ctx.respond(f'{session.display_queue()}')
 
 
 @vc.command(
@@ -766,39 +807,21 @@ async def play_from_youtube(
     query: str
 ):
     await ctx.respond('Give me a second !')
-    guild_id = ctx.guild.id
-    # not connected to any VC
-    if guild_id not in server_sessions or not ctx.user.voice:
-        if ctx.user.voice is None:
-            await ctx.edit(
-                content=f'You are not connected to any voice channel !'
-            )
-            return
-        else:
-            session: ServerSession = await join(
-                ctx,
-                ctx.user.voice.channel,
-                predecessor=True
-            )
-    else:  # is connected to a VC
-        session = server_sessions[guild_id]
-        # connected to a different VC than the command issuer (but within the same server)
-        if session.voice_client.channel != ctx.user.voice.channel:
-            await session.voice_client.move_to(ctx.user.voice.channel)
-            await ctx.edit(content=f'Connected to {ctx.user.voice.channel} !')
-
+    # Connect
+    session: ServerSession = await connect(ctx)
     try:
         await ctx.edit(content='Downloading the audio...')
-        requests.get(query)
+        if is_url(query, sites=['youtube.com', 'youtu.be']):
+            requests.get(query)
 
-    # if not a valid URL, do search and play the first video in search result
-    except (requests.exceptions.InvalidURL, requests.exceptions.MissingSchema):
-        query_string = urllib.parse.ncode({"search_query": query})
-        formatUrl = urllib.request.urlopen(
-            "https://www.youtube.com/results?" + query_string)
-        search_results = re.findall(
-            r"watch\?v=(\S{11})", formatUrl.read().decode())
-        url = f'https://www.youtube.com/watch?v={search_results[0]}'
+        # if not a valid URL, do search and play the first video in search result
+        else:
+            query_string = urllib.parse.urlencode({"search_query": query})
+            formatUrl = urllib.request.urlopen(
+                "https://www.youtube.com/results?" + query_string)
+            search_results = re.findall(
+                r"watch\?v=(\S{11})", formatUrl.read().decode())
+            url = f'https://www.youtube.com/watch?v={search_results[0]}'
 
     except requests.exceptions.InvalidSchema:
         await ctx.edit(content=f'Hmm it seems like the URL is not valid!')
@@ -907,7 +930,7 @@ async def on_message(
             Chat(message.guild.id)
         chat: Chat = active_chats[message.guild.id]
 
-        if 'draw' in message.content.lower():
+        if '-draw' in message.content.lower():
             results = chat.draw(message.content, message.author.display_name)
             await message.channel.send(results['image_url'])
             await message.channel.send(results['reply'])
