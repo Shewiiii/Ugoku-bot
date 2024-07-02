@@ -37,6 +37,7 @@ memory_prompt = (
     "Make a list with minimal words of key points in this "
     "dialogue. No markdown or unnecessary words. "
     "Put what can make you remember the other. "
+    "Precise who said what."
     "Put the dates of when its said as well"
     "Max: 500 characters"
 )
@@ -63,8 +64,7 @@ def shorter(reply: str, username: str) -> str | None:
         messages=[{
             "role": "user",
             "content": reply
-        }
-        ]+shortener_prompt(username),
+        }]+shortener_prompt(username),
         n=1
     )
     shortened = reauest.choices[0].message.content
@@ -87,7 +87,7 @@ class Chat():
         user_msg: str,
         username: str,
         model: str = 'gpt-4o-2024-05-13',
-        images_url: list[str] = []
+        image_urls: list[str] = []
     ) -> str | None:
         # Stats
         self.last_prompt = datetime.now().strftime("%m/%d/%Y, %H:%M")
@@ -112,8 +112,8 @@ class Chat():
         saved_message = deepcopy(requested_message)
 
         # Add the images if there are
-        if images_url:
-            for url in images_url:
+        if image_urls:
+            for url in image_urls:
                 requested_message['content'].append(
                     {
                         "type": "image_url",
@@ -126,8 +126,8 @@ class Chat():
 
         # Manage message list
         self.slice_msg(last=10)
-        # Rest has to be odd
-        if len(self.old_messages) % 10 == 5:
+        # Rest has to be even 
+        if len(self.old_messages) % 10 == 8:
             self.memorize()
 
         # The completion/API request itself

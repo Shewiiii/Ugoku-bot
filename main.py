@@ -830,42 +830,6 @@ async def talk(
 
 
 @bot.command(
-    name='timer',
-    description=(
-        'Add a second timer until a chosen date. '
-        'Live for the moment !'
-    )
-)
-async def timer(
-    ctx: discord.ApplicationContext,
-    name: str,
-    utc: int,
-    year: int,
-    month: int,
-    day: int,
-    hour: int,
-    minute: int,
-) -> None:
-    # Default UTC is +2
-    try:
-        date = datetime(year, month, day, hour+(utc-2), minute)
-        await ctx.respond('Timer set !')
-        now = datetime.now()
-        while date > now:
-            delta = date - now
-            await ctx.edit(
-                content=f'{name}: {delta.seconds} seconds remaining.'
-            )
-            sleep(0.8)
-            now = datetime.now()
-        await ctx.respond(
-            f"<@{ctx.author.id}> Time's up ! ( ^^) _旦~~"
-        )
-    except ValueError as e:
-        await ctx.respond(f'Error, {e} !')
-
-
-@bot.command(
     name='debug',
     description='debug'
 )
@@ -894,7 +858,7 @@ def can_use_chatbot(message: discord.Message):
 async def on_message(
     message: discord.Message
 ) -> None:
-    images_url = []
+    image_urls = []
     if can_use_chatbot(message):
         processed_message = message.content
         # Create a new chat if needed
@@ -907,7 +871,7 @@ async def on_message(
             # Grab the link of the images
             for attachment in message.attachments:
                 if "image" in attachment.content_type:
-                    images_url.append(attachment.url)
+                    image_urls.append(attachment.url)
 
         # EMOTES
         # Only grabs the first emote, would be too expensive otherwise..
@@ -925,13 +889,18 @@ async def on_message(
 
         if has_emote:
             url = f'https://cdn.discordapp.com/emojis/{snowflake}.png'
-            images_url.append(url)
+            image_urls.append(url)
+
+        # STICKERS
+        if message.stickers:
+            sticker: discord.StickerItem = message.stickers[0]
+            image_urls.append(sticker.url)
 
         # REPLY
         reply = chat.prompt(
             user_msg=processed_message[1:],
             username=message.author.display_name,
-            images_url=images_url
+            image_urls=image_urls
         )
         await message.channel.send(reply)
 
@@ -1058,9 +1027,6 @@ commands.add_field(
     name='Miscellaneous',
     value=(
         '> [/ping](http://example.com/) - Shows the ping of Ugoku !\n'
-        '> \n'
-        '> [/timer](http://example.com/) - Add a second timer '
-        'until a chosen date. Live for the moment !\n'
         '> \n'
         '> [/talk](http://example.com/) - *なに～* '
         '<:ugoku_yummy:1238139232913199105>\n'
