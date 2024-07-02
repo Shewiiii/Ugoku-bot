@@ -14,7 +14,6 @@
 - Finish the music player:
   - Add the possibility to add an entire album in queue (/vc play).
   - ...
-- Add a /meaning command, to search the meaning (+sentence/pitch accent/...) of a Japanese word.
 - Improve queue design.
 - Add download modes (eg. upload songs one by one for albums/playlists).
 - Add the ability to /vc play an entire playlist/album at once.
