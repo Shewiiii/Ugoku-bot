@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import openai
 from datetime import datetime
 from copy import deepcopy
+import re
 
 
 load_dotenv()
@@ -10,7 +11,7 @@ API_KEY = os.getenv('OPENAI_API_KEY')
 
 openai.api_key = API_KEY
 active_chats = {}
-
+client = openai.OpenAI()
 
 sys_prompt = (
     "Respect ALL the following:"
@@ -87,6 +88,7 @@ class Chat():
         user_msg: str,
         username: str,
         model: str = 'gpt-4o-2024-05-13',
+        role: str = 'user',
         image_urls: list[str] = []
     ) -> str | None:
         # Stats
@@ -95,15 +97,15 @@ class Chat():
 
         # Create a new message
         requested_message: dict = {
-            "role": "user",
+            "role": role,
             "content": [
-                    {
-                        "type": "text",
-                        "text": (
+                {
+                    "type": "text",
+                    "text": (
                             f'[{self.last_prompt}-'
                             f'{username} talking] {user_msg}'
-                        )
-                    }
+                    )
+                }
             ]
         }
 
@@ -126,15 +128,15 @@ class Chat():
 
         # Manage message list
         self.slice_msg(last=10)
-        # Rest has to be even 
+        # Rest has to be even
         if len(self.old_messages) % 10 == 8:
             self.memorize()
 
         # The completion/API request itself
         chat = openai.chat.completions.create(
             model=model,
-            # So message is a list lol
             messages=[{
+                # System prompt
                 "role": "system",
                 "content": [
                     {
@@ -180,10 +182,45 @@ class Chat():
         reply = 'Old chat, your memory: ' + memo.choices[0].message.content
         self.memory = reply
 
-    def reset_chat(self):
-        self.messages = []
-        self.old_messages = []
-        self.memory = ''
+    def draw(self, prompt: str, username: str) -> dict:
+        prompt = prompt.lower()
+        for w in ['-', 'draw me', 'draw', 'ugoku',
+                  'うごく', 'chan', 'ちゃん', '描いて']:
+            # Remove useless words, to not confuse the prompt
+            prompt = prompt.replace(w, '')
+        emote = re.search('<(.+?)>', prompt)
+        while emote:
+            prompt = prompt.replace(emote.group(0), '')
+            emote = re.search('<(.+?)>', prompt)
+        print('prompt:', prompt)
+
+        response = client.images.generate(
+            model="dall-e-3",
+            prompt=f'{prompt}, anime style',
+            # Because Ugoku (???)
+            size="1024x1024",
+            quality="hd",
+            n=1,
+        )
+        image_url = response.data[0].url
+        reply = self.prompt(
+            user_msg=(
+                'You finished a drawing with '
+                f'{prompt} on it for {username}.'
+                'You are talking to him. '
+                'Dont describe the image.'
+            ),
+            username='Ugoku',
+            role='system'
+        )
+        results = {'image_url': image_url, 'reply': reply}
+        return results
+
+
+def reset_chat(self):
+    self.messages = []
+    self.old_messages = []
+    self.memory = ''
 
 
 if __name__ == '__main__':

@@ -854,55 +854,66 @@ def can_use_chatbot(message: discord.Message):
             and message.guild.id in whitelisted_servers)
 
 
+def generate_response(message: discord.message, chat: Chat) -> str:
+    image_urls = []
+    processed_message: str = message.content
+
+    # IMAGE
+    if message.attachments:
+        # Grab the link of the images
+        for attachment in message.attachments:
+            if "image" in attachment.content_type:
+                image_urls.append(attachment.url)
+
+    # EMOTES
+    # Only grabs the first emote, would be too expensive otherwise..
+    has_emote = False
+    result: re.Match = re.search('<(.+?)>', processed_message)
+    if result:
+        emote = result.group(0)
+        nums = re.findall(r'\d+', emote)
+        name: re.Match = re.search(':(.+?):', processed_message)
+        if nums:
+            snowflake = nums[-1]
+            processed_message = processed_message.replace(
+                emote, name.group(0))
+            has_emote = True
+
+    if has_emote:
+        url = f'https://cdn.discordapp.com/emojis/{snowflake}.png'
+        image_urls.append(url)
+
+    # STICKERS
+    if message.stickers:
+        sticker: discord.StickerItem = message.stickers[0]
+        image_urls.append(sticker.url)
+
+    # REPLY
+    reply = chat.prompt(
+        user_msg=processed_message[1:],
+        username=message.author.display_name,
+        image_urls=image_urls
+    )
+    return reply
+
+
 @bot.event
 async def on_message(
     message: discord.Message
 ) -> None:
-    image_urls = []
     if can_use_chatbot(message):
-        processed_message = message.content
         # Create a new chat if needed
         if not message.guild.id in active_chats:
             Chat(message.guild.id)
         chat: Chat = active_chats[message.guild.id]
 
-        # IMAGE
-        if message.attachments:
-            # Grab the link of the images
-            for attachment in message.attachments:
-                if "image" in attachment.content_type:
-                    image_urls.append(attachment.url)
-
-        # EMOTES
-        # Only grabs the first emote, would be too expensive otherwise..
-        has_emote = False
-        result: re.Match = re.search('<(.+?)>', processed_message)
-        if result:
-            emote = result.group(0)
-            nums = re.findall(r'\d+', emote)
-            name: re.Match = re.search(':(.+?):', processed_message)
-            if nums:
-                snowflake = nums[-1]
-                processed_message = processed_message.replace(
-                    emote, name.group(0))
-                has_emote = True
-
-        if has_emote:
-            url = f'https://cdn.discordapp.com/emojis/{snowflake}.png'
-            image_urls.append(url)
-
-        # STICKERS
-        if message.stickers:
-            sticker: discord.StickerItem = message.stickers[0]
-            image_urls.append(sticker.url)
-
-        # REPLY
-        reply = chat.prompt(
-            user_msg=processed_message[1:],
-            username=message.author.display_name,
-            image_urls=image_urls
-        )
-        await message.channel.send(reply)
+        if 'draw' in message.content.lower():
+            results = chat.draw(message.content, message.author.display_name)
+            await message.channel.send(results['image_url'])
+            await message.channel.send(results['reply'])
+        else:
+            reply = generate_response(message, chat)
+            await message.channel.send(reply)
 
 
 ################ HELP SECTION ################
