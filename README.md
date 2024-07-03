@@ -14,6 +14,9 @@
 - Finish the music player:
   - Add the possibility to add an entire album in queue (/vc play).
   - Add the possibility to play any uploaded file (for Yuuka-chan ~)
+  - Optimize Zotify integration (pretty slow to add songs when they're from Spotify)
+  - Do not download all the playlist before playing the first song
+  - ..
 - Improve queue design.
 - Add download modes (eg. upload songs one by one for albums/playlists).
 - Add the ability to /vc play an entire playlist/album at once.
