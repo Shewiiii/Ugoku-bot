@@ -573,9 +573,9 @@ class Downloader:
                 if not logged and ctx:
                     await ctx.edit(
                         content=(
-                            'No valid ARL has been found. '
-                            'This should never happen. '
-                            'Please contact the developer.'
+                            'No valid ARL has been found, '
+                            'or the track is not available '
+                            'in any country.'
                         )
                     )
                     raise NoARLFound

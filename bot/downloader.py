@@ -4,6 +4,7 @@ import os
 from os import listdir
 from datetime import datetime
 from typing import Literal
+from copy import deepcopy
 
 from deezer import Deezer
 from deezer import TrackFormats
@@ -20,7 +21,6 @@ import discord
 from bot.timer import Timer
 from bot.arls import get_arl, get_countries, load_arl
 from bot.search import ISO3166, A_ISO3166
-
 from bot.exceptions import *
 
 
@@ -68,13 +68,13 @@ custom_arls = {}
 # ------------------------------------
 
 
-def get_format(bitrate: Literal[9, 3, 1, 15, 14, 13] | None):
-    if bitrate == TrackFormats.FLAC:
-        format_ = 'flac'
-    else:
-        format_ = 'mp3'
-
-    return format_
+def get_extension(format: str) -> str:
+    '''format can be like mp3 320, mp3 120, flac, ...
+    '''
+    format = format.lower()
+    for extension in ['mp3', 'flac', 'ogg']:
+        if extension in format:
+            return extension
 
 
 def recursive_write(path, zip_file):
@@ -128,21 +128,15 @@ def get_objects(
 def init_dl(
     url: str,
     user_id: int,
-    brfm: str = 'mp3 320',
+    format: str = 'MP3 320',
     arl_info: dict = {'arl': ARL, 'country': ARL_COUNTRY},
     settings: dict = settings
-) -> tuple[list, str]:
+) -> list:
+    '''Create a list of converted download objects from a Spotify/Deezer URL.
+    '''
     # Check if custom_arl
     dz = load_arl(user_id, arl_info['arl'])
-
-    # Set the path according to the bitrate/format
-    og_path = settings['downloadLocation']
-    settings['downloadLocation'] = f"{settings['downloadLocation']}/{brfm}"
-
-    bitrate = getBitrateNumberFromText(str(brfm))
-    format_ = get_format(bitrate)
-
-    brfm = brfm.lower()
+    bitrate = getBitrateNumberFromText(format)
 
     # Init objects
     downloadObjects = get_objects(
@@ -167,28 +161,45 @@ def init_dl(
             converted_objs.append(obj)
 
     # Put the normal path again
-    settings['downloadLocation'] = og_path
-    return converted_objs, format_
+    return converted_objs
 
 
 async def download_links(
     dz: Deezer,
     downloadObjects: list,
+    format: str,
     ctx: discord.ApplicationContext | None = None,
     timer: Timer | None = None,
     settings: dict = settings
 ) -> list:
+    '''Download a single or a collection from download objects.
+    Returns a list of info dictionaries.
+
+    info_dict = {
+        'trackAPI': trackAPI,
+        'albumAPI': albumAPI,
+        'playlistAPI': playlistAPI,
+        'title': trackAPI['title'],
+        'artist': trackAPI['contributors'][0]['name'],
+        'path': Path(writepath),
+    }
+
+    '''
     all_data = []
     for obj in downloadObjects:
         # Create Track object to get final path
+        temp_settings = deepcopy(settings)
         try:
+            temp_settings['downloadLocation'] = (
+                f"{settings['downloadLocation']}/{format}"
+            )
             all_data += await Downloader(
                 dz=dz,
                 downloadObject=obj,
-                settings=settings,
                 ctx=ctx,
                 listener=listener,
-                timer=timer
+                timer=timer,
+                settings=temp_settings
             ).start()
         except TrackNotFound:
             if len(downloadObjects) > 1 and ctx:
@@ -202,11 +213,15 @@ async def download_links(
 
 async def download(
     downloadObjects: list,
-    format_: str,
+    format: str,
     ctx: discord.ApplicationContext,
     arl: str | int | None = ARL,
     timer: Timer | None = None,
 ) -> dict | None:
+    '''Download a single or a collection from download objects.
+    Archive collections in zip files.
+    '''
+    extension = get_extension(format)
     arl = str(arl)
     # Check if custom_arl
     dz = load_arl(ctx.user.id, arl)
@@ -219,20 +234,24 @@ async def download(
         downloadObjects,
         ctx=ctx,
         timer=timer,
+        format=format
     )
 
-    # [0][0]: API, [0][1]: Path
     real_final = ''
     path_count = len(all_data)
     if path_count == 0:
         raise TrackNotFound
+
+    # ALL THE CODE BELOW IS COMPLETE MADNESS:
     # Case 1: It's not a song
     elif path_count > 1 or all_data[0]['path'].is_dir():
 
         # Case 1.1: There is only one folder
         if path_count == 1:
-            real_final = ("./output/archives/songs/"
-                          f"{all_data[0]['title']}.zip")
+            real_final = (
+                "./output/archives/songs/"
+                f"{all_data[0]['title']}.zip"
+            )
 
         # Case 1.2: There is *not* only one folder
         else:
@@ -253,7 +272,7 @@ async def download(
                 recursive_write(path, zip_file)
             # Case 1.1.2: One of the thing is a song
             else:
-                if format_ in str(path) and path.is_file():
+                if extension in str(path) and path.is_file():
                     zip_file.write(path)
 
         zip_file.close()
@@ -263,20 +282,21 @@ async def download(
         return {'all_data': all_data, 'path': all_data[0]['path']}
 
 
-async def dl(
+async def complete_dl(
     ctx: discord.ApplicationContext,
     url: str,
     arl_info: dict,
     timer: Timer,
     format: str
 ) -> str:
-    '''Download a track or a collection then returns ther path.
+    '''Download a track or a collection then returns their path.
+    Format examples: MP3 320, MP3 128, FLAC.
     '''
-    downloadObjects, format_ = init_dl(
+    downloadObjects = init_dl(
         url=url,
         user_id=ctx.user.id,
         arl_info=arl_info,
-        brfm=format
+        format=format
     )
     if not downloadObjects:
         raise TrackNotFound
@@ -287,13 +307,13 @@ async def dl(
     )
     results = await download(
         downloadObjects,
-        format_,
+        format=format,
         ctx=ctx,
         arl=arl_info['arl'],
         timer=timer,
     )
     if not results:
         raise TrackNotFound
-    
+
     path = results['path']
     return path

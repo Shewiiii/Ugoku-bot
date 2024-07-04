@@ -52,7 +52,8 @@ def get_setting(
             json.dump(settings, json_file)
         return default
  
-def get_whitelist() -> list:
+
+def get_list(setting: str) -> list:
     with open(settings_path, 'r') as json_file:
-        settings = json.load(json_file)
-        return settings['whitelistedServers']
+            settings = json.load(json_file)
+            return settings[setting]

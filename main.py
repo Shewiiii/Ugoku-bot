@@ -70,7 +70,7 @@ sd = SpotifyDownloader()
 arl_countries = get_countries()
 
 # Only for chatbot (for now)
-whitelisted_servers: list = get_whitelist()
+whitelisted_servers: list = get_list('whitelistedServers')
 
 # VC deemix settings: ignore tags and download only the song itself
 # Init settings
@@ -159,6 +159,7 @@ async def songs(
     query: str,
     format: str | int | None = None,
 ) -> None:
+    index = {'FLAC': 0, 'MP3 320': 1, 'MP3 128': 2}
     timer = Timer()
 
     await ctx.respond(f'Give me a second !')
@@ -176,62 +177,60 @@ async def songs(
             await ctx.edit(content='Track not found on Deezer !')
             return
 
-    if not format:
+    if format not in index:
         format = get_setting(
             ctx.user.id,
             'defaultMusicFormat',
             'MP3 320'
         )
     try:
-        path = await dl(
-            ctx=ctx,
-            url=url,
-            arl_info=arl_info,
-            timer=timer,
-            format=format
-        )
-        size = os.path.getsize(path)
+        success = False
+        i = index[format]
+        formats = ['FLAC', 'MP3 320', 'MP3 128']
+
+        while not success:
+            path = await complete_dl(
+                ctx=ctx,
+                url=url,
+                arl_info=arl_info,
+                timer=timer,
+                format=formats[i]
+            )
+            size = os.path.getsize(path)
+            if size < ctx.guild.filesize_limit:
+                success = True
+            elif i >= len(formats) - 1:
+                await ctx.edit(content='Track too heavy ーへー')
+                return
+            else:
+                i += 1
+                await ctx.send(
+                    'Track too heavy, '
+                    f'trying the following format: {formats[i]}.'
+                )
 
         logging.info(f'Chosen format: {format}')
         logging.info(f'File size: {size}, Path: {path}')
 
-        if size >= ctx.guild.filesize_limit:
-            if format != 'MP3 320' and format != 'MP3 128':
-
-                await ctx.edit(
-                    content='Track too heavy, trying '
-                            'to download with MP3 320...'
-                )
-                path = await dl(
-                    ctx=ctx,
-                    url=url,
-                    arl_info=arl_info,
-                    timer=timer,
-                    format=format
-                )
-                size = os.path.getsize(path)
-                logging.info(f'File size: {size}, Path: {path}')
-                if size >= ctx.guild.filesize_limit:
-                    await ctx.edit(content='Track too heavy ￣へ￣')
-                    return
-            else:
-                await ctx.edit(content='Track too heavy ￣へ￣')
-                return
         # SUCESS:
         await ctx.edit(
             content=f'Download finished, {timer.round()}. Uploading...'
         )
         await ctx.send(
             file=discord.File(path),
-            content=(f"Sorry for the wait <@{ctx.author.id}> ! "
-                     "Here's the song(s) you requested. Enjoy (￣︶￣*))")
+            content=(
+                f"Sorry for the wait <@{ctx.author.id}> ! "
+                "Here's the song(s) you requested. Enjoy (￣︶￣*))"
+            )
         )
         await ctx.edit(content=f'Done ! {timer.total()}')
 
     except InvalidARL:
         await ctx.edit(
-            content=('The Deezer ARL is not valid. '
-                     'Please contact the developer or use a custom ARL.')
+            content=(
+                'The Deezer ARL is not valid. '
+                'Please contact the developer or use a custom ARL.'
+            )
         )
     except TrackNotFound:
         await ctx.edit(
@@ -502,29 +501,11 @@ class ServerSession:
 async def join(
     ctx: discord.ApplicationContext,
     channel: discord.VoiceChannel,
-    predecessor: bool = False,
 ) -> None:
     if ctx.voice_client is not None:
         await ctx.voice_client.move_to(channel)
-        if predecessor:
-            await ctx.edit(
-                content=f'Joined {ctx.voice_client.channel.name} !'
-            )
-        else:
-            await ctx.respond(
-                f'Joined {ctx.voice_client.channel.name} !'
-            )
-
     else:
         await channel.connect()
-        if predecessor:
-            await ctx.edit(
-                content=f'Joined {ctx.voice_client.channel.name} !'
-            )
-        else:
-            await ctx.respond(
-                f'Joined {ctx.voice_client.channel.name} !'
-            )
 
     if ctx.voice_client.is_connected():
         server_sessions[ctx.guild.id] = ServerSession(
@@ -536,20 +517,19 @@ async def join(
         await ctx.edit(content=f'Failed to connect to voice channel {ctx.user.voice.channel.name}.')
 
 
-async def connect(ctx: discord.ApplicationContext) -> ServerSession:
+async def connect(ctx: discord.ApplicationContext) -> ServerSession | None:
     guild_id = ctx.guild.id
     if guild_id not in server_sessions or not ctx.user.voice:
         # not connected to any VC
         if ctx.user.voice is None:
-            await ctx.edit(
+            await ctx.respond(
                 content=f'You are not connected to any voice channel !'
             )
             return
         else:
             session: ServerSession = await join(
                 ctx,
-                ctx.user.voice.channel,
-                predecessor=True
+                ctx.user.voice.channel
             )
 
     else:  # is connected to a VC
@@ -558,12 +538,16 @@ async def connect(ctx: discord.ApplicationContext) -> ServerSession:
             # connected to a different VC than the command issuer
             # (but within the same server)
             await session.voice_client.move_to(ctx.user.voice.channel)
-            await ctx.send(f'Connected to {ctx.user.voice.channel}.')
 
     return session
 
 
 async def play_deezer(ctx: discord.ApplicationContext, query: str) -> None:
+    # Join
+    session: ServerSession | None = await connect(ctx)
+    if not session:
+        return
+
     await ctx.respond(f'Connecting to Deezer...')
     if query:
         # Connecting
@@ -584,25 +568,24 @@ async def play_deezer(ctx: discord.ApplicationContext, query: str) -> None:
                 raise TrackNotFound
 
         # Actual downloading
-        downloadObjects, _ = init_dl(
+        format = 'FLAC'
+        downloadObjects = init_dl(
             url=url,
             user_id=ctx.user.id,
             arl_info=arl_info,
-            brfm='flac',
+            format=format,
             settings=vc_settings
         )
         all_data = await download_links(
             dz,
             downloadObjects,
             settings=vc_settings,
-            ctx=ctx
+            ctx=ctx,
+            format=format
         )
         info_dict = all_data[0]
         if not downloadObjects:
             raise TrackNotFound
-
-        # Join
-        session: ServerSession = await connect(ctx)
 
         await session.add_to_queue(ctx, info_dict, source='Deezer')
         if not session.voice_client.is_playing() and len(session.queue) <= 1:
@@ -610,9 +593,12 @@ async def play_deezer(ctx: discord.ApplicationContext, query: str) -> None:
 
 
 async def play_spotify(ctx: discord.ApplicationContext, url: str) -> None:
-    await ctx.respond('Give me a second !')
     # Connect
-    session: ServerSession = await connect(ctx)
+    session: ServerSession | None = await connect(ctx)
+    if not session:
+        return
+
+    await ctx.respond('Give me a second !')
     # Problem: have to wait to dl EVERYTHING before playing
     all_data = sd.from_url(url)
     first_info_dict = all_data.pop(0)
@@ -658,9 +644,6 @@ async def play(
             await play_spotify(ctx, query)
         except FileNotFoundError as e:
             await ctx.edit(content='Invalid URL ! Please try again.')
-            print(e)
-            print(e)
-            print(e)
     else:
         await ctx.respond('wut duh')
 
@@ -805,10 +788,13 @@ async def channel_bitrate(
 async def play_from_youtube(
     ctx: discord.ApplicationContext,
     query: str
-):
-    await ctx.respond('Give me a second !')
+) -> None:
     # Connect
-    session: ServerSession = await connect(ctx)
+    session: ServerSession | None = await connect(ctx)
+    if not session:
+        return
+
+    await ctx.respond('Give me a second !')
     try:
         await ctx.edit(content='Downloading the audio...')
         if is_url(query, sites=['youtube.com', 'youtu.be']):
@@ -849,6 +835,8 @@ async def talk(
     ctx: discord.ApplicationContext,
     message: str
 ) -> None:
+    # logging.info(f'{ctx.author.name} used /talk: "{message}"')
+    # :aAzusaLaugh:
     await ctx.send(message)
 
 
@@ -870,11 +858,15 @@ async def debug(
 ################ CHATBOT ################
 
 # So here I use the old method (Events) to make the chatbot, just because
+# It allows a more fluent chat
 
 
 def can_use_chatbot(message: discord.Message):
-    return (message.content.startswith('-')
-            and message.guild.id in whitelisted_servers)
+    return (
+        message.content.startswith('-')
+        and message.guild.id in whitelisted_servers
+        # and message.author.id not in get_blacklisted_users()
+    )
 
 
 def generate_response(message: discord.message, chat: Chat) -> str:

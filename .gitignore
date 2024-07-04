@@ -16,3 +16,5 @@ deemix/vc_config/queue
 deemix/vc_config/logs
 deemix/vc_config/spotify/.auth-cache
 
+kusho.py
+bot/temp.py
