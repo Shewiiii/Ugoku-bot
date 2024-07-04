@@ -14,7 +14,7 @@ class SpotifyDownloader:
         id: str = str(datetime.timestamp(datetime.now())).replace('.', '')
         path = Path('.').absolute() / 'output' / 'vc_songs' / 'OGG 320' / id
         subprocess.run(
-            f'zotify {url} --output ./{id}/''"{artist} - {song_name}.{ext}"',
+            f'zotify {url} --root-path "{path}" --output "{path}"/''"{artist} - {song_name}.{ext}"',
             shell=True
         )
         df: pd.DataFrame = pd.read_csv(
