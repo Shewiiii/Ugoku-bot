@@ -623,14 +623,17 @@ async def play_spotify(ctx: discord.ApplicationContext, url: str) -> None:
     # Connect
     session: ServerSession = await connect(ctx)
     # Problem: have to wait to dl EVERYTHING before playing
-    all_data = sd.from_url(url)
-    first_info_dict = all_data.pop(0)
-    await session.add_to_queue(ctx, first_info_dict, source='Spotify')
-    if not session.voice_client.is_playing() and len(session.queue) <= 1:
-        await session.start_playing(ctx)
 
-    for info_dict in all_data:
-        await session.add_to_queue(ctx, info_dict, source='Spotify')
+    # Play songs only if user is in a voice channel
+    if session:
+        all_data = sd.from_url(url)
+        first_info_dict = all_data.pop(0)
+        await session.add_to_queue(ctx, first_info_dict, source='Spotify')
+        if not session.voice_client.is_playing() and len(session.queue) <= 1:
+            await session.start_playing(ctx)
+
+        for info_dict in all_data:
+            await session.add_to_queue(ctx, info_dict, source='Spotify')
 
 
 @vc.command(
