@@ -1,5 +1,6 @@
 import subprocess
 from datetime import datetime
+from dotenv import load_dotenv
 import pandas as pd
 from pathlib import Path, WindowsPath
 import os
@@ -13,8 +14,11 @@ class SpotifyDownloader:
     def from_url(self, url: str) -> list[dict]:
         id: str = str(datetime.timestamp(datetime.now())).replace('.', '')
         path = Path('.').absolute() / 'output' / 'vc_songs' / 'OGG 320' / id
+        load_dotenv()
+        username = os.getenv('SPOTIFY_USERNAME')
+        password = os.getenv('SPOTIFY_PASSWORD')
         subprocess.run(
-            f'zotify {url} --root-path "{path}" --output "{path}"/''"{artist} - {song_name}.{ext}"',
+            f'zotify {url} --username "{username}" --password "{password}" --root-path "{path}" --output "{path}"/''"{artist} - {song_name}.{ext}"',
             shell=True
         )
         df: pd.DataFrame = pd.read_csv(
