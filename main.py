@@ -18,8 +18,18 @@ from bot.arls import *
 from bot.timer import Timer
 from typing import Any
 from bot.search import get_song_url, is_url, A_ISO3166
-from bot.chatbot import Chat, active_chats
 from bot.spotify import SpotifyDownloader
+
+load_dotenv()
+
+# Make chatbot module optional
+
+API_KEY = os.getenv('OPENAI_API_KEY')
+if API_KEY:
+    from bot.chatbot import Chat, active_chats
+else:
+    print('No OpenAI API key found, chatbot module disabled.')  # just a small reminder
+
 
 
 # From https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5
@@ -59,7 +69,6 @@ intents.message_content = True
 bot = discord.Bot(intents=intents)
 
 # VARIABLES
-load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 DEV_TOKEN = os.getenv('DEV_TOKEN')
 ARL = os.getenv('DEEZER_ARL')
@@ -594,6 +603,7 @@ async def play_deezer(ctx: discord.ApplicationContext, query: str) -> None:
 
 async def play_spotify(ctx: discord.ApplicationContext, url: str) -> None:
     # Connect
+    # Play songs only if user is in a voice channel
     session: ServerSession | None = await connect(ctx)
     if not session:
         return
@@ -603,6 +613,7 @@ async def play_spotify(ctx: discord.ApplicationContext, url: str) -> None:
     all_data = sd.from_url(url)
     first_info_dict = all_data.pop(0)
     await session.add_to_queue(ctx, first_info_dict, source='Spotify')
+
     if not session.voice_client.is_playing() and len(session.queue) <= 1:
         await session.start_playing(ctx)
 
@@ -838,6 +849,7 @@ async def talk(
     # logging.info(f'{ctx.author.name} used /talk: "{message}"')
     # :aAzusaLaugh:
     await ctx.send(message)
+    await ctx.respond('Done !', ephemeral=True)     # remove the annoying 'the application does not respond' message
 
 
 @bot.command(
@@ -860,75 +872,75 @@ async def debug(
 # So here I use the old method (Events) to make the chatbot, just because
 # It allows a more fluent chat
 
-
-def can_use_chatbot(message: discord.Message):
-    return (
-        message.content.startswith('-')
-        and message.guild.id in whitelisted_servers
-        # and message.author.id not in get_blacklisted_users()
-    )
-
-
-def generate_response(message: discord.message, chat: Chat) -> str:
-    image_urls = []
-    processed_message: str = message.content
-
-    # IMAGE
-    if message.attachments:
-        # Grab the link of the images
-        for attachment in message.attachments:
-            if "image" in attachment.content_type:
-                image_urls.append(attachment.url)
-
-    # EMOTES
-    # Only grabs the first emote, would be too expensive otherwise..
-    has_emote = False
-    result: re.Match = re.search('<(.+?)>', processed_message)
-    if result:
-        emote = result.group(0)
-        nums = re.findall(r'\d+', emote)
-        name: re.Match = re.search(':(.+?):', processed_message)
-        if nums:
-            snowflake = nums[-1]
-            processed_message = processed_message.replace(
-                emote, name.group(0))
-            has_emote = True
-
-    if has_emote:
-        url = f'https://cdn.discordapp.com/emojis/{snowflake}.png'
-        image_urls.append(url)
-
-    # STICKERS
-    if message.stickers:
-        sticker: discord.StickerItem = message.stickers[0]
-        image_urls.append(sticker.url)
-
-    # REPLY
-    reply = chat.prompt(
-        user_msg=processed_message[1:],
-        username=message.author.display_name,
-        image_urls=image_urls
-    )
-    return reply
+if API_KEY:  # api key is given
+    def can_use_chatbot(message: discord.Message):
+        return (
+            message.content.startswith('-')
+            and message.guild.id in whitelisted_servers
+            # and message.author.id not in get_blacklisted_users()
+        )
 
 
-@bot.event
-async def on_message(
-    message: discord.Message
-) -> None:
-    if can_use_chatbot(message):
-        # Create a new chat if needed
-        if not message.guild.id in active_chats:
-            Chat(message.guild.id)
-        chat: Chat = active_chats[message.guild.id]
+    def generate_response(message: discord.message, chat: Chat) -> str:
+        image_urls = []
+        processed_message: str = message.content
 
-        if '-draw' in message.content.lower():
-            results = chat.draw(message.content, message.author.display_name)
-            await message.channel.send(results['image_url'])
-            await message.channel.send(results['reply'])
-        else:
-            reply = generate_response(message, chat)
-            await message.channel.send(reply)
+        # IMAGE
+        if message.attachments:
+            # Grab the link of the images
+            for attachment in message.attachments:
+                if "image" in attachment.content_type:
+                    image_urls.append(attachment.url)
+
+        # EMOTES
+        # Only grabs the first emote, would be too expensive otherwise..
+        has_emote = False
+        result: re.Match = re.search('<(.+?)>', processed_message)
+        if result:
+            emote = result.group(0)
+            nums = re.findall(r'\d+', emote)
+            name: re.Match = re.search(':(.+?):', processed_message)
+            if nums:
+                snowflake = nums[-1]
+                processed_message = processed_message.replace(
+                    emote, name.group(0))
+                has_emote = True
+
+        if has_emote:
+            url = f'https://cdn.discordapp.com/emojis/{snowflake}.png'
+            image_urls.append(url)
+
+        # STICKERS
+        if message.stickers:
+            sticker: discord.StickerItem = message.stickers[0]
+            image_urls.append(sticker.url)
+
+        # REPLY
+        reply = chat.prompt(
+            user_msg=processed_message[1:],
+            username=message.author.display_name,
+            image_urls=image_urls
+        )
+        return reply
+
+
+    @bot.event
+    async def on_message(
+        message: discord.Message
+    ) -> None:
+        if can_use_chatbot(message):
+            # Create a new chat if needed
+            if not message.guild.id in active_chats:
+                Chat(message.guild.id)
+            chat: Chat = active_chats[message.guild.id]
+
+            if '-draw' in message.content.lower():
+                results = chat.draw(message.content, message.author.display_name)
+                await message.channel.send(results['image_url'])
+                await message.channel.send(results['reply'])
+            else:
+                reply = generate_response(message, chat)
+                await message.channel.send(reply)
 
 
 ################ HELP SECTION ################
