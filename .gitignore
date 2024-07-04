@@ -1,5 +1,6 @@
 .env
 .venv
+.DS_Store
 __pycache__
 output
 
@@ -16,4 +17,5 @@ deemix/vc_config/queue
 deemix/vc_config/logs
 deemix/vc_config/spotify/.auth-cache
 
-.DS_Store
+kusho.py
+bot/temp.py
