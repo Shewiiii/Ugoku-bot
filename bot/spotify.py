@@ -92,7 +92,7 @@ class SpotifyDownloader:
             id = await self.get_id_from_query(query=user_input)
 
         display_name = await self.get_track_name(id)
-        source: bytes = await self.get_track_source(id)
+        source: BytesIO = await self.get_track_source(id)
 
         info_dict = {
             'display_name': display_name,

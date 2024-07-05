@@ -630,7 +630,7 @@ async def play_deezer(ctx: discord.ApplicationContext, query: str) -> None:
 
         # Actual downloading
         format = 'FLAC'
-        downloadObjects = deezer.init_dl(
+        downloadObjects = await deezer.init_dl(
             url=url,
             user_id=ctx.user.id,
             arl_info=arl_info,
@@ -693,14 +693,15 @@ async def play(
     if not source:
         source = get_setting(ctx.author.id, 'defaultMusicService', 'Spotify')
 
-    if source == 'Deezer':
+    if source.lower() == 'deezer':
         try:
             await play_deezer(ctx, query)
         except TrackNotFound:
             await ctx.edit(
-                content='Track not found on Deezer !'
+                content='Track not found on Deezer, searching on Spotify...'
             )
-    elif source == 'Spotify':
+            await play(ctx, query, source='Spotify')
+    elif source.lower() == 'spotify':
         try:
             await play_spotify(ctx, query)
         except TrackNotFound:
