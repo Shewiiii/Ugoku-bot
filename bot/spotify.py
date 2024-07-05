@@ -1,5 +1,4 @@
 from librespot.core import Session
-from librespot.core import Session
 from librespot.metadata import TrackId
 from librespot.audio.decoders import AudioQuality, VorbisOnlyAudioQuality
 
@@ -34,6 +33,7 @@ scope = "user-library-read"
 auth_manager = SpotifyClientCredentials()
 sp = spotipy.Spotify(auth_manager=auth_manager)
 
+
 class SpotifyDownloader:
     async def get_track_source(self, id: str) -> BytesIO | None:
         '''Get the data of a track from a single ID.
@@ -41,13 +41,13 @@ class SpotifyDownloader:
         '''
         track_id: TrackId = TrackId.from_uri(f"spotify:track:{id}")
         stream = session.content_feeder().load(
-            track_id, VorbisOnlyAudioQuality(AudioQuality.VERY_HIGH), False, None
+            track_id, VorbisOnlyAudioQuality(
+                AudioQuality.VERY_HIGH), False, None
         )
 
         source: bytes = stream.input_stream.stream().read()
         io_source = BytesIO(source)
         return io_source
-
 
     async def get_track_name(self, id: str) -> str | None:
         try:
@@ -61,7 +61,6 @@ class SpotifyDownloader:
         )
         return display_name
 
-
     async def get_id_from_url(self, url: str) -> str | None:
         track_url_search = re.findall(
             r"^(https?://)?open\.spotify\.com/track/(?P<TrackID>[0-9a-zA-Z]{22})(\?si=.+?)?$",
@@ -72,7 +71,6 @@ class SpotifyDownloader:
         id: str = track_url_search[0][1]
         return id
 
-
     async def get_id_from_query(self, query: str) -> str | None:
         search = sp.search(q=query, limit=1)
         if not search:
@@ -80,17 +78,16 @@ class SpotifyDownloader:
         id = search['tracks']['items'][0]['id']
         return id
 
-
     async def get_track(self, user_input: str) -> dict[str, BytesIO] | None:
-        '''Returns a info dictionary {'display_name': str, 'source': bytes}
+        '''Returns a info dictionary {'display_name': str, 'source': BytesIO}
         '''
         if is_url(user_input, ['open.spotify.com']):
             id: str = await self.get_id_from_url(user_input)
-            if not id:
-                return
         else:
             id = await self.get_id_from_query(query=user_input)
 
+        if not id:
+            return
         display_name = await self.get_track_name(id)
         source: BytesIO = await self.get_track_source(id)
 

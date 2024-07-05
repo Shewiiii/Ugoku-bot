@@ -933,10 +933,10 @@ if API_KEY:  # api key is given
             # and message.author.id not in get_blacklisted_users()
         )
 
-    def generate_response(message: discord.message, chat: Chat) -> str:
+    def generate_response(message: discord.Message, chat: Chat) -> str:
         image_urls = []
         processed_message: str = message.content
-
+        
         # IMAGE
         if message.attachments:
             # Grab the link of the images

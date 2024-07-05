@@ -151,10 +151,12 @@ class Chat():
         # Save the message, without image
         # after the request
         self.messages.append(saved_message)
-        print(self.messages[-1])
 
         reply = chat.choices[0].message.content
         if reply:
+            # Remove the hyphen if there is one at the beginning of the message
+            if reply[0] == '-':
+                reply = reply[1:]
             # Adding the reply to the message history
             self.messages.append(
                 {
