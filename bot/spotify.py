@@ -1,55 +1,101 @@
-import subprocess
-from datetime import datetime
-from dotenv import load_dotenv
-import pandas as pd
-from pathlib import Path, WindowsPath
-import os
-import shutil
+from librespot.core import Session
+from librespot.core import Session
+from librespot.metadata import TrackId
+from librespot.audio.decoders import AudioQuality, VorbisOnlyAudioQuality
 
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+
+from bot.search import is_url
+
+from io import BytesIO
+import re
+from dotenv import load_dotenv
+import os
+
+
+load_dotenv()
+# Variables
+SPOTIFY_USERNAME = os.getenv('SPOTIFY_USERNAME')
+SPOTIFY_PASSWORD = os.getenv('SPOTIFY_PASSWORD')
+
+SPOTIPY_CLIENT_ID = os.getenv('SPOTIPY_CLIENT_ID')
+SPOTIPY_CLIENT_SECRET = os.getenv('SPOTIPY_CLIENT_SECRET')
+SPOTIPY_REDIRECT_URI = os.getenv('SPOTIPY_REDIRECT_URI')
+
+# Init session
+# librespot
+session = Session.Builder() \
+    .user_pass(SPOTIFY_USERNAME, SPOTIFY_PASSWORD) \
+    .create()
+
+# Spotipy
+scope = "user-library-read"
+auth_manager = SpotifyClientCredentials()
+sp = spotipy.Spotify(auth_manager=auth_manager)
 
 class SpotifyDownloader:
-    # def __init__(self) -> None:
-    # pass
-
-    def from_url(self, url: str) -> list[dict]:
-        id: str = str(datetime.timestamp(datetime.now())).replace('.', '')
-        path = Path('.').absolute() / 'output' / 'vc_songs' / 'OGG 320' / id
-        load_dotenv()
-        username = os.getenv('SPOTIFY_USERNAME')
-        password = os.getenv('SPOTIFY_PASSWORD')
-        subprocess.run(
-            f'zotify {url} --username "{username}" --password "{password}" --root-path "{path}" --output "{path}"/''"{artist} - {song_name}.{ext}"',
-            shell=True
+    async def get_track_source(self, id: str) -> BytesIO | None:
+        '''Get the data of a track from a single ID.
+        Returns an info dictionary.
+        '''
+        track_id: TrackId = TrackId.from_uri(f"spotify:track:{id}")
+        stream = session.content_feeder().load(
+            track_id, VorbisOnlyAudioQuality(AudioQuality.VERY_HIGH), False, None
         )
-        df: pd.DataFrame = pd.read_csv(
-            path / '.song_ids',
-            sep="	",
-            header=None,
-            names=['id', 'date', 'artist', 'title', 'file']
+
+        source: bytes = stream.input_stream.stream().read()
+        io_source = BytesIO(source)
+        return io_source
+
+
+    async def get_track_name(self, id: str) -> str | None:
+        try:
+            track_API: dict = sp.track(id)
+        except TypeError:
+            return
+
+        display_name: str = (
+            f"{track_API['artists'][0]['name']} "
+            f"- {track_API['name']}"
         )
-        all_data = []
-        for file, artist, title in zip(df['file'], df['artist'], df['title']):
-            all_data.append(
-                {
-                    'path': path / file,
-                    'display_name': f'{artist} - {title}'
-                }
-            )
+        return display_name
 
-        return all_data
 
-    def from_query(self, query: str) -> None:
-        raise NotImplementedError
+    async def get_id_from_url(self, url: str) -> str | None:
+        track_url_search = re.findall(
+            r"^(https?://)?open\.spotify\.com/track/(?P<TrackID>[0-9a-zA-Z]{22})(\?si=.+?)?$",
+            string=url
+        )
+        if not track_url_search:
+            return
+        id: str = track_url_search[0][1]
+        return id
 
-    def clean(self) -> None:
-        folder = Path('.').absolute() / 'output' / 'vc_songs' / 'OGG 320'
 
-        for filename in os.listdir(folder):
-            file_path = os.path.join(folder, filename)
-            try:
-                if os.path.isfile(file_path) or os.path.islink(file_path):
-                    os.unlink(file_path)
-                elif os.path.isdir(file_path):
-                    shutil.rmtree(file_path)
-            except Exception as e:
-                print('Failed to delete %s. Reason: %s' % (file_path, e))
+    async def get_id_from_query(self, query: str) -> str | None:
+        search = sp.search(q=query, limit=1)
+        if not search:
+            return
+        id = search['tracks']['items'][0]['id']
+        return id
+
+
+    async def get_track(self, user_input: str) -> dict[str, BytesIO] | None:
+        '''Returns a info dictionary {'display_name': str, 'source': bytes}
+        '''
+        if is_url(user_input, ['open.spotify.com']):
+            id: str = await self.get_id_from_url(user_input)
+            if not id:
+                return
+        else:
+            id = await self.get_id_from_query(query=user_input)
+
+        display_name = await self.get_track_name(id)
+        source: bytes = await self.get_track_source(id)
+
+        info_dict = {
+            'display_name': display_name,
+            'source': source
+        }
+        return info_dict

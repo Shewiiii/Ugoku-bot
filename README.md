@@ -4,7 +4,8 @@
 - Download songs, albums or playlists from Deezer (with a Deezer or Spotify link).
 - Play songs in vc, with the **best possible audio quality**.
   - Bypasses the channel's audio bitrate.
-  - Audio taken from lossless files, then converted to Opus 510kbps.
+  - Audio taken from lossless files, then converted to Opus 510kbps if Deezer is the source.
+  - Audio taken from OGG 320kbps stream, then converted to Opus 510kbps if Spotify is the source.
 - Play songs/videos in vc from Youtube, with standard audio quality.
 - Set default file format/bitrate (Available: FLAC, MP3 320 or MP3 128).
 - Chat (using GPT-4o)
@@ -17,7 +18,7 @@
   - Optimize Zotify integration (pretty slow to add songs when they're from Spotify)
   - Do not download all the playlist before playing the first song
   - ..
-- Improve queue design.
+- Improve queue design, add markdowns.
 - Add download modes (eg. upload songs one by one for albums/playlists).
 - Add the ability to /vc play an entire playlist/album at once.
 

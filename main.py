@@ -1,5 +1,6 @@
 import discord
 from discord.ext import commands
+
 import yt_dlp
 import asyncio
 
@@ -7,29 +8,30 @@ import urllib
 import re
 import logging
 import os
+from dotenv import load_dotenv
 from time import sleep, gmtime
 from datetime import datetime
-from dotenv import load_dotenv
+from typing import Any
+
 from bot.line import get_stickerpack
-from bot.downloader import *
+from bot.deezer import DeezerDownloader
+from bot.spotify import SpotifyDownloader
 from bot.exceptions import *
 from bot.settings import *
 from bot.arls import *
 from bot.timer import Timer
-from typing import Any
 from bot.search import get_song_url, is_url, A_ISO3166
-from bot.spotify import SpotifyDownloader
+
 
 load_dotenv()
 
 # Make chatbot module optional
-
 API_KEY = os.getenv('OPENAI_API_KEY')
 if API_KEY:
     from bot.chatbot import Chat, active_chats
 else:
-    print('No OpenAI API key found, chatbot module disabled.')  # just a small reminder
-
+    # just a small reminder
+    print('No OpenAI API key found, chatbot module disabled.')
 
 
 # From https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5
@@ -63,20 +65,23 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S',
 )
 
-# INIT BOT
+# Init bot
 intents = discord.Intents.default()
 intents.message_content = True
 bot = discord.Bot(intents=intents)
 
-# VARIABLES
+# Variables
 TOKEN = os.getenv('DISCORD_TOKEN')
 DEV_TOKEN = os.getenv('DEV_TOKEN')
 ARL = os.getenv('DEEZER_ARL')
 ARL_COUNTRY = os.getenv('ARL_COUNTRY')
 OWNER_ID = int(os.getenv('OWNER_ID'))
 g_arl_info = {'arl': ARL, 'country': ARL_COUNTRY}
-sd = SpotifyDownloader()
 arl_countries = get_countries()
+
+spotify = SpotifyDownloader()
+deezer = DeezerDownloader()
+
 
 # Only for chatbot (for now)
 whitelisted_servers: list = get_list('whitelistedServers')
@@ -166,7 +171,7 @@ async def stickers(
 async def songs(
     ctx: discord.ApplicationContext,
     query: str,
-    format: str | int | None = None,
+    format: str | None = None,
 ) -> None:
     index = {'FLAC': 0, 'MP3 320': 1, 'MP3 128': 2}
     timer = Timer()
@@ -198,7 +203,7 @@ async def songs(
         formats = ['FLAC', 'MP3 320', 'MP3 128']
 
         while not success:
-            path = await complete_dl(
+            path = await deezer.complete_dl(
                 ctx=ctx,
                 url=url,
                 arl_info=arl_info,
@@ -412,6 +417,57 @@ class ServerSession:
 
         return ''.join(elements)
 
+    async def discord_play(
+        self,
+        ctx: discord.ApplicationContext,
+        predecessor: bool = False
+    ) -> None:
+        source = self.queue[0]['source']
+        if source == 'Youtube':
+            if predecessor:
+                await ctx.edit(
+                    content=f"Now playing: {self.queue[0]['element'].title}"
+                )
+            else:
+                await ctx.send(
+                    f"Now playing: {self.queue[0]['element'].title}"
+                )
+            self.voice_client.play(
+                self.queue[0]['element'].audio_source,
+                after=lambda e=None: self.after_playing(ctx, e)
+            )
+        else:
+            if predecessor:
+                await ctx.edit(
+                    content=(
+                        "Now playing: "
+                        f"{self.queue[0]['element']['display_name']}"
+                    )
+                )
+            else:
+                await ctx.send(
+                    "Now playing: "
+                    f"{self.queue[0]['element']['display_name']}"
+                )
+
+            if source == 'Spotify':
+                self.voice_client.play(
+                    discord.FFmpegOpusAudio(
+                        self.queue[0]['element']['source'],
+                        bitrate=510,
+                        pipe=True
+                    ),
+                    after=lambda e=None: self.after_playing(ctx, e)
+                )
+            else:
+                self.voice_client.play(
+                    discord.FFmpegOpusAudio(
+                        self.queue[0]['element']['source'],
+                        bitrate=510,
+                    ),
+                    after=lambda e=None: self.after_playing(ctx, e)
+                )
+
     async def add_to_queue(
         self,
         ctx: discord.ApplicationContext,
@@ -440,27 +496,7 @@ class ServerSession:
         self,
         ctx: discord.ApplicationContext
     ) -> None:
-        source = self.queue[0]['source']
-        if source == 'Youtube':
-            await ctx.edit(
-                content=f"Now playing: {self.queue[0]['element'].title}"
-            )
-            self.voice_client.play(
-                self.queue[0]['element'].audio_source,
-                after=lambda e=None: self.after_playing(ctx, e)
-            )
-        else:
-            await ctx.edit(
-                content=("Now playing: "
-                         f"{self.queue[0]['element']['display_name']}")
-            )
-            self.voice_client.play(
-                discord.FFmpegOpusAudio(
-                    self.queue[0]['element']['path'],
-                    bitrate=510,
-                ),
-                after=lambda e=None: self.after_playing(ctx, e)
-            )
+        await self.discord_play(ctx=ctx, predecessor=True)
 
     def after_playing(
         self,
@@ -483,24 +519,7 @@ class ServerSession:
         ctx: discord.ApplicationContext
     ) -> None:
         self.queue.pop(0)
-        if self.queue:
-            if self.queue[0]['source'] == 'Youtube':
-                # Element: yt-dl element
-                self.voice_client.play(
-                    self.queue[0]['element'].audio_source,
-                    after=lambda e=None: self.after_playing(ctx, e)
-                )
-            else:
-                # Element: deezer element
-                await ctx.send(
-                    content=("Now playing: "
-                             f"{self.queue[0]['element']['display_name']}")
-                )
-                self.voice_client.play(
-                    discord.FFmpegOpusAudio(
-                        self.queue[0]['element']['path'], bitrate=510),
-                    after=lambda e=None: self.after_playing(ctx, e)
-                )
+        await self.discord_play(ctx=ctx)
 
 
 @vc.command(
@@ -578,14 +597,14 @@ async def play_deezer(ctx: discord.ApplicationContext, query: str) -> None:
 
         # Actual downloading
         format = 'FLAC'
-        downloadObjects = init_dl(
+        downloadObjects = deezer.init_dl(
             url=url,
             user_id=ctx.user.id,
             arl_info=arl_info,
             format=format,
             settings=vc_settings
         )
-        all_data = await download_links(
+        all_data = await deezer.download_links(
             dz,
             downloadObjects,
             settings=vc_settings,
@@ -601,24 +620,20 @@ async def play_deezer(ctx: discord.ApplicationContext, query: str) -> None:
             await session.start_playing(ctx)
 
 
-async def play_spotify(ctx: discord.ApplicationContext, url: str) -> None:
-    # Connect
-    # Play songs only if user is in a voice channel
+# Temp function again, only works with a track for now
+async def play_spotify(ctx: discord.ApplicationContext, user_input: str) -> None:
     session: ServerSession | None = await connect(ctx)
     if not session:
         return
 
     await ctx.respond('Give me a second !')
-    # Problem: have to wait to dl EVERYTHING before playing
-    all_data = sd.from_url(url)
-    first_info_dict = all_data.pop(0)
-    await session.add_to_queue(ctx, first_info_dict, source='Spotify')
+    info_dict: dict = await spotify.get_track(user_input)
+    if not info_dict:
+        raise TrackNotFound
 
+    await session.add_to_queue(ctx, info_dict, source='Spotify')
     if not session.voice_client.is_playing() and len(session.queue) <= 1:
         await session.start_playing(ctx)
-
-    for info_dict in all_data:
-        await session.add_to_queue(ctx, info_dict, source='Spotify')
 
 
 @vc.command(
@@ -640,8 +655,11 @@ async def play_spotify(ctx: discord.ApplicationContext, url: str) -> None:
 async def play(
     ctx: discord.ApplicationContext,
     query: str,
-    source: str
+    source: str | None = None
 ) -> None:
+    if not source:
+        source = 'Spotify'
+
     if source == 'Deezer':
         try:
             await play_deezer(ctx, query)
@@ -649,12 +667,11 @@ async def play(
             await ctx.edit(
                 content='Track not found on Deezer !'
             )
-
     elif source == 'Spotify':
         try:
             await play_spotify(ctx, query)
-        except FileNotFoundError as e:
-            await ctx.edit(content='Invalid URL ! Please try again.')
+        except TrackNotFound:
+            await ctx.edit(content='Track not found on Spotify !')
     else:
         await ctx.respond('wut duh')
 
@@ -849,7 +866,8 @@ async def talk(
     # logging.info(f'{ctx.author.name} used /talk: "{message}"')
     # :aAzusaLaugh:
     await ctx.send(message)
-    await ctx.respond('Done !', ephemeral=True)     # remove the annoying 'the application does not respond' message
+    # remove the annoying 'the application does not respond' message
+    await ctx.respond('Done !', ephemeral=True)
 
 
 @bot.command(
@@ -879,7 +897,6 @@ if API_KEY:  # api key is given
             and message.guild.id in whitelisted_servers
             # and message.author.id not in get_blacklisted_users()
         )
-
 
     def generate_response(message: discord.message, chat: Chat) -> str:
         image_urls = []
@@ -923,7 +940,6 @@ if API_KEY:  # api key is given
         )
         return reply
 
-
     @bot.event
     async def on_message(
         message: discord.Message
@@ -935,7 +951,8 @@ if API_KEY:  # api key is given
             chat: Chat = active_chats[message.guild.id]
 
             if '-draw' in message.content.lower():
-                results = chat.draw(message.content, message.author.display_name)
+                results = chat.draw(
+                    message.content, message.author.display_name)
                 await message.channel.send(results['image_url'])
                 await message.channel.send(results['reply'])
             else:

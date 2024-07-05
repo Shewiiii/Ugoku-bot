@@ -373,7 +373,7 @@ class Downloader:
             'title': trackAPI['title'],
             'artist': trackAPI['contributors'][0]['name'],
             # Because that mf is a string lmao
-            'path': Path(writepath),
+            'source': Path(writepath),
         }
         info_dict['display_name'] = f"{info_dict['artist']} - {info_dict['title']}"
         
