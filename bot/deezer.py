@@ -124,7 +124,7 @@ class DeezerDownloader:
         return downloadObjects
 
 
-    def init_dl(
+    async def init_dl(
         self, 
         url: str,
         user_id: int,
@@ -295,7 +295,7 @@ class DeezerDownloader:
         '''Download a track or a collection then returns their path.
         Format examples: MP3 320, MP3 128, FLAC.
         '''
-        downloadObjects = self.init_dl(
+        downloadObjects = await self.init_dl(
             url=url,
             user_id=ctx.user.id,
             arl_info=arl_info,

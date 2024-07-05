@@ -2,5 +2,6 @@
     "defaultMusicFormat": {},
     "publicArl": {},
     "defaultVolume": {},
-    "whitelistedServers": []
+    "whitelistedServers": [],
+    "defaultMusicService": {}
 }

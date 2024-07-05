@@ -273,7 +273,7 @@ async def default_music_format(
     ctx: discord.ApplicationContext,
     format: str
 ) -> None:
-    if format not in ['FLAC', 'MP3 320', 'MP3 128']:
+    if format.lower() not in ['flac', 'mp3 320', 'mp3 128']:
         await ctx.respond('Please select a valid format !')
     else:
         await change_settings(
@@ -281,8 +281,40 @@ async def default_music_format(
             'defaultMusicFormat',
             format
         )
-        await ctx.respond('Your default music format '
-                          f'has been set to {format} !')
+        await ctx.respond(
+            f'Your default music format has been set to {format} !'
+        )
+
+
+@set.command(
+    name='default-streaming-service',
+    description='Change your default music streaming service in vc.'
+)
+@discord.option(
+    'service',
+    type=discord.SlashCommandOptionType.string,
+    description=(
+        'The music streaming service. '
+        'Spotify: wider library, Deezer: even better audio quality.'
+    ),
+    autocomplete=discord.utils.basic_autocomplete(
+        ['Spotify', 'Deezer']),
+)
+async def default_music_service(
+    ctx: discord.ApplicationContext,
+    service: str
+) -> None:
+    if service.lower() not in ['spotify', 'deezer']:
+        await ctx.respond('Please select a valid format !')
+    else:
+        await change_settings(
+            ctx.author.id,
+            'defaultMusicService',
+            service
+        )
+        await ctx.respond(
+            f'Your default streaming service has been set to {service} !'
+        )
 
 
 @set.command(
@@ -332,6 +364,7 @@ async def default_arl(ctx: discord.ApplicationContext) -> None:
     await ctx.edit(content="You are now using the default ARL !")
 
 
+# ========================== VC COMMANDS ==========================
 vc = bot.create_group(
     "vc",
     "Voice channel commands."
@@ -658,7 +691,7 @@ async def play(
     source: str | None = None
 ) -> None:
     if not source:
-        source = 'Spotify'
+        source = get_setting(ctx.author.id, 'defaultMusicService', 'Spotify')
 
     if source == 'Deezer':
         try:
@@ -847,6 +880,7 @@ async def play_from_youtube(
     if not session.voice_client.is_playing() and len(session.queue) <= 1:
         await session.start_playing(ctx)
 
+
 # End of vc commands
 
 
@@ -1030,6 +1064,10 @@ commands.add_field(
         '> [/set default-music-format](http://example.com/) - '
         'Defines the format in which you want to receive music files '
         'by default.\n'
+        '> \n'
+        '> [/set default-streaming-service](http://example.com/) - '
+        'Defines what music streaming service you want to use by default '
+        'when using /vc play.\n'
         '> \n'
         '> [/set default-arl](http://example.com/) - Changes your '
         'Deezer location to the default one: France.\n'
