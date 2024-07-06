@@ -2,6 +2,7 @@ from deezer import API
 import requests
 import re
 from deezer import Deezer
+from difflib import SequenceMatcher
 
 api = API(
     headers={
@@ -538,3 +539,7 @@ def is_url(string: str, sites: list) -> bool:
         if site in search[0][0]:
             return True
     return False
+
+
+def similar(a: str, b: str, lower: bool = True) -> float:
+    return SequenceMatcher(None, a.lower(), b.lower()).ratio()

@@ -5,7 +5,8 @@ from librespot.audio.decoders import AudioQuality, VorbisOnlyAudioQuality
 import spotipy
 from spotipy.oauth2 import SpotifyClientCredentials
 
-from bot.search import is_url
+from bot.search import is_url, similar
+from bot.exceptions import NotACollection
 
 from io import BytesIO
 import re
@@ -29,12 +30,12 @@ session = Session.Builder() \
     .create()
 
 # Spotipy
-scope = "user-library-read"
 auth_manager = SpotifyClientCredentials()
 sp = spotipy.Spotify(auth_manager=auth_manager)
 
 
-class SpotifyDownloader:
+class Spotify_:
+
     async def get_track_source(self, id: str) -> BytesIO | None:
         '''Get the data of a track from a single ID.
         Returns an info dictionary.
@@ -61,38 +62,97 @@ class SpotifyDownloader:
         )
         return display_name
 
-    async def get_id_from_url(self, url: str) -> str | None:
+    async def get_id_from_url(self, url: str) -> dict | None:
         track_url_search = re.findall(
-            r"^(https?://)?open\.spotify\.com/track/(?P<TrackID>[0-9a-zA-Z]{22})(\?si=.+?)?$",
+            r"^(https?://)?open\.spotify\.com/(track|album|playlist)/(?P<ID>[0-9a-zA-Z]{22})(\?si=.+?)?$",
             string=url
         )
         if not track_url_search:
             return
-        id: str = track_url_search[0][1]
-        return id
+        id: str = track_url_search[0][2]
+        type = track_url_search[0][1]
 
-    async def get_id_from_query(self, query: str) -> str | None:
+        if type == 'album' or type == 'playlist':
+            is_collection = True
+        else:
+            is_collection = False
+
+        return {'id': id, 'is_collection': is_collection}
+
+    async def get_id_from_query(self, query: str) -> dict | None:
         search = sp.search(q=query, limit=1)
         if not search:
             return
-        id = search['tracks']['items'][0]['id']
-        return id
+        # Basically searching if the query is an album or song
+        items: str = search['tracks']['items']
+        if not items:
+            return
+        item = items[0]
 
-    async def get_track(self, user_input: str) -> dict[str, BytesIO] | None:
+        track_ratio: float = similar(
+            query,
+            # E.g: Thaehan Intro
+            f"{item['artists'][0]['name']} {item['name']}"
+        )
+        album_ratio: float = similar(
+            query,
+            # E.g: Thaehan Two Poles
+            f"{item['album']['artists'][0]['name']} {item['album']['name']}"
+        )
+        if track_ratio > album_ratio:
+            id: str = item['id']
+            is_collection = False
+        else:
+            id: str = item['album']['id']
+            is_collection = True
+
+        return {'id': id, 'is_collection': is_collection}
+
+    async def get_track_items_from_collection(self, id: str) -> list:
+        try:
+            return sp.album_tracks(id)['items']
+        except spotipy.SpotifyException:
+            try:
+                items = sp.playlist_items(id)['items']
+                return [item['track'] for item in items]
+            except spotipy.SpotifyException:
+                raise NotACollection
+
+    async def get_collection_track_ids(self, id: str) -> list[str]:
+        items: list = await self.get_track_items_from_collection(id)
+        track_ids = [item['id'] for item in items]
+        return track_ids
+
+    async def get_track_urls(self, user_input: str) -> list | None:
+        ids = await self.get_track_ids(user_input)
+        if not ids:
+            return
+        return [f'https://open.spotify.com/track/{id}' for id in ids]
+
+    # Ok so basically only that method should be used in the bot..
+    async def get_track_ids(self, user_input: str) -> list | None:
+        if is_url(user_input, ['open.spotify.com']):
+            result: dict = await self.get_id_from_url(user_input)
+        else:
+            result: dict = await self.get_id_from_query(query=user_input)
+        if not result:
+            return
+
+        if result['is_collection']:
+            ids: list = await self.get_collection_track_ids(result['id'])
+            return ids
+
+        return [result['id']]
+
+    # ..And that one :elaina_magic:
+    async def get_track(self, id: str) -> dict[str, BytesIO] | None:
         '''Returns a info dictionary {'display_name': str, 'source': BytesIO}
         '''
-        if is_url(user_input, ['open.spotify.com']):
-            id: str = await self.get_id_from_url(user_input)
-        else:
-            id = await self.get_id_from_query(query=user_input)
-
-        if not id:
-            return
-        display_name = await self.get_track_name(id)
+        display_name: str = await self.get_track_name(id)
         source: BytesIO = await self.get_track_source(id)
 
         info_dict = {
             'display_name': display_name,
-            'source': source
+            'source': source,
         }
         return info_dict

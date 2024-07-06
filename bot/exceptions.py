@@ -10,3 +10,6 @@ class NoARLFound(Exception):
 
 class IncorrectURL(Exception):
     pass
+
+class NotACollection(Exception):
+    pass

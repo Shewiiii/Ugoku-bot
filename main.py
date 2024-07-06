@@ -9,13 +9,11 @@ import re
 import logging
 import os
 from dotenv import load_dotenv
-from time import sleep, gmtime
-from datetime import datetime
 from typing import Any
 
 from bot.line import get_stickerpack
 from bot.deezer import DeezerDownloader
-from bot.spotify import SpotifyDownloader
+from bot.spotify import Spotify_
 from bot.exceptions import *
 from bot.settings import *
 from bot.arls import *
@@ -79,7 +77,7 @@ OWNER_ID = int(os.getenv('OWNER_ID'))
 g_arl_info = {'arl': ARL, 'country': ARL_COUNTRY}
 arl_countries = get_countries()
 
-spotify = SpotifyDownloader()
+spotify = Spotify_()
 deezer = DeezerDownloader()
 
 
@@ -427,12 +425,7 @@ class ServerSession:
             return 'No songs in queue !'
 
         # Currently playing
-        # Youtube
-        if self.queue[0]['source'] == 'Youtube':
-            title = self.queue[0]['element']
-        # Deezer or Spotify
-        else:
-            title = self.queue[0]['element']['display_name']
+        title = self.queue[0]['element']['display_name']
         elements = [
             "Currently playing: "
             f"{title} ({self.queue[0]['source']})\n"
@@ -453,53 +446,44 @@ class ServerSession:
     async def discord_play(
         self,
         ctx: discord.ApplicationContext,
-        predecessor: bool = False
+        successor: bool = False
     ) -> None:
         source = self.queue[0]['source']
-        if source == 'Youtube':
-            if predecessor:
-                await ctx.edit(
-                    content=f"Now playing: {self.queue[0]['element'].title}"
-                )
-            else:
-                await ctx.send(
-                    f"Now playing: {self.queue[0]['element'].title}"
-                )
-            self.voice_client.play(
-                self.queue[0]['element'].audio_source,
-                after=lambda e=None: self.after_playing(ctx, e)
-            )
-        else:
-            if predecessor:
-                await ctx.edit(
-                    content=(
-                        "Now playing: "
-                        f"{self.queue[0]['element']['display_name']}"
-                    )
-                )
-            else:
-                await ctx.send(
+        if successor:
+            await ctx.edit(
+                content=(
                     "Now playing: "
                     f"{self.queue[0]['element']['display_name']}"
                 )
+            )
+        else:
+            await ctx.send(
+                "Now playing: "
+                f"{self.queue[0]['element']['display_name']}"
+            )
 
-            if source == 'Spotify':
-                self.voice_client.play(
-                    discord.FFmpegOpusAudio(
-                        self.queue[0]['element']['source'],
-                        bitrate=510,
-                        pipe=True
-                    ),
-                    after=lambda e=None: self.after_playing(ctx, e)
-                )
-            else:
-                self.voice_client.play(
-                    discord.FFmpegOpusAudio(
-                        self.queue[0]['element']['source'],
-                        bitrate=510,
-                    ),
-                    after=lambda e=None: self.after_playing(ctx, e)
-                )
+        if source == 'Youtube':
+            self.voice_client.play(
+                self.queue[0]['element']['source'],
+                after=lambda e=None: self.after_playing(ctx, e)
+            )
+        elif source == 'Spotify':
+            self.voice_client.play(
+                discord.FFmpegOpusAudio(
+                    self.queue[0]['element']['source'],
+                    bitrate=510,
+                    pipe=True
+                ),
+                after=lambda e=None: self.after_playing(ctx, e)
+            )
+        else:
+            self.voice_client.play(
+                discord.FFmpegOpusAudio(
+                    self.queue[0]['element']['source'],
+                    bitrate=510,
+                ),
+                after=lambda e=None: self.after_playing(ctx, e)
+            )
 
     async def add_to_queue(
         self,
@@ -514,22 +498,21 @@ class ServerSession:
                 loop=bot.loop,
                 stream=False
             )
-            self.queue.append({'element': yt_source, 'source': source})
-            if len(self.queue) > 1:
-                await ctx.edit(
-                    content=f'Added to queue: {yt_source.title} !')
-        else:
-            self.queue.append({'element': element, 'source': source})
-            if len(self.queue) > 1:
-                await ctx.edit(
-                    content=f"Added to queue: {element['display_name']} !"
-                )
+            element = {
+                'display_name': yt_source.title,
+                'source': yt_source.audio_source
+            }
+        self.queue.append({'element': element, 'source': source})
+        if len(self.queue) > 1:
+            await ctx.edit(
+                content=f"Added to queue: {element['display_name']} !"
+            )
 
     async def start_playing(
         self,
         ctx: discord.ApplicationContext
     ) -> None:
-        await self.discord_play(ctx=ctx, predecessor=True)
+        await self.discord_play(ctx=ctx, successor=True)
 
     def after_playing(
         self,
@@ -606,67 +589,81 @@ async def connect(ctx: discord.ApplicationContext) -> ServerSession | None:
 async def play_deezer(ctx: discord.ApplicationContext, query: str) -> None:
     # Join
     session: ServerSession | None = await connect(ctx)
-    if not session:
+    # Get urls from query with the Spotify_ wrapper
+    urls: list = await spotify.get_track_urls(query)
+    if not session or not urls:
         return
 
+    # Connecting
     await ctx.respond(f'Connecting to Deezer...')
-    if query:
-        # Connecting
-        arl_info = get_setting(
-            ctx.author.id,
-            'publicArl',
-            g_arl_info
-        )
-        dz = load_arl(ctx.user.id, arl_info['arl'])
-        await ctx.edit(content=f'Getting the song...')
+    arl_info = get_setting(
+        ctx.author.id,
+        'publicArl',
+        g_arl_info
+    )
+    dz = load_arl(ctx.user.id, arl_info['arl'])
+    await ctx.edit(content=f'Getting the song...')
 
-        # Not an url ? Then get it !
-        if is_url(query, sites=['spotify', 'deezer']):
-            url = query
-        else:
-            url = get_song_url(query, dz=dz)
-            if not url:
-                raise TrackNotFound
+    # # Not an url ? Then get it !
+    # if is_url(query, sites=['spotify', 'deezer']):
+    #     url = query
+    # else:
+    #     url = get_song_url(query, dz=dz)
+    #     if not url:
+    #         raise TrackNotFound
 
+    for url in urls:
         # Actual downloading
         format = 'FLAC'
-        downloadObjects = await deezer.init_dl(
-            url=url,
-            user_id=ctx.user.id,
-            arl_info=arl_info,
-            format=format,
-            settings=vc_settings
-        )
-        all_data = await deezer.download_links(
-            dz,
-            downloadObjects,
-            settings=vc_settings,
-            ctx=ctx,
-            format=format
-        )
-        info_dict = all_data[0]
-        if not downloadObjects:
-            raise TrackNotFound
+        try:
+            downloadObjects = await deezer.init_dl(
+                url=url,
+                dz=dz,
+                arl_info=arl_info,
+                format=format,
+                settings=vc_settings
+            )
+            all_data = await deezer.download_links(
+                dz,
+                downloadObjects,
+                settings=vc_settings,
+                ctx=ctx,
+                format=format
+            )
+            info_dict = all_data[0]
+            await session.add_to_queue(ctx, info_dict, source='Deezer')
+            if not session.voice_client.is_playing() and len(session.queue) <= 1:
+                await session.start_playing(ctx)
 
-        await session.add_to_queue(ctx, info_dict, source='Deezer')
-        if not session.voice_client.is_playing() and len(session.queue) <= 1:
-            await session.start_playing(ctx)
+        except TrackNotFound:
+            await ctx.edit(
+                content='Track not found on Deezer, searching on Spotify...'
+            )
+            await play_spotify(ctx, user_input=url, successor=True)
 
 
-# Temp function again, only works with a track for now
-async def play_spotify(ctx: discord.ApplicationContext, user_input: str) -> None:
+async def play_spotify(
+    ctx: discord.ApplicationContext,
+    user_input: str,
+    successor: bool = False
+) -> None:
     session: ServerSession | None = await connect(ctx)
     if not session:
-        return
-
-    await ctx.respond('Give me a second !')
-    info_dict: dict = await spotify.get_track(user_input)
-    if not info_dict:
         raise TrackNotFound
 
-    await session.add_to_queue(ctx, info_dict, source='Spotify')
-    if not session.voice_client.is_playing() and len(session.queue) <= 1:
-        await session.start_playing(ctx)
+    # Only show that message if
+    if not successor:
+        await ctx.respond('Give me a second !')
+    ids: list | None = await spotify.get_track_ids(user_input)
+    if not ids:
+        await ctx.edit(content='Track not found !')
+        return
+
+    for id in ids:
+        info_dict: dict = await spotify.get_track(id)
+        await session.add_to_queue(ctx, info_dict, source='Spotify')
+        if not session.voice_client.is_playing() and len(session.queue) <= 1:
+            await session.start_playing(ctx)
 
 
 @vc.command(
@@ -698,14 +695,15 @@ async def play(
             await play_deezer(ctx, query)
         except TrackNotFound:
             await ctx.edit(
-                content='Track not found on Deezer, searching on Spotify...'
+                content='Track not found !'
             )
-            await play(ctx, query, source='Spotify')
+
     elif source.lower() == 'spotify':
         try:
-            await play_spotify(ctx, query)
+            await play_spotify(ctx, query, successor=False)
         except TrackNotFound:
             await ctx.edit(content='Track not found on Spotify !')
+
     else:
         await ctx.respond('wut duh')
 
@@ -761,7 +759,6 @@ async def show_queue(ctx: discord.ApplicationContext):
     guild_id = ctx.guild.id
     if guild_id in server_sessions:
         session: ServerSession = server_sessions[guild_id]
-        print('queue:', session.display_queue())
         await ctx.respond(f'{session.display_queue()}')
 
 
@@ -789,7 +786,9 @@ async def remove(
             await ctx.respond(f'https://tenor.com/view/chocola-nekopara-hnzk-gif-26103729 ')
         else:
             removed = server_sessions[id].queue.pop(index)
-            await ctx.respond(f'Removed {removed} from queue !')
+            await ctx.respond(
+                f"Removed {removed['element']['display_name']} from queue !"
+            )
 
 
 @vc.command(
@@ -853,29 +852,28 @@ async def play_from_youtube(
 ) -> None:
     # Connect
     session: ServerSession | None = await connect(ctx)
+    url = None
     if not session:
         return
 
-    await ctx.respond('Give me a second !')
-    try:
-        await ctx.edit(content='Downloading the audio...')
-        if is_url(query, sites=['youtube.com', 'youtu.be']):
+    await ctx.respond('Downloading the audio...')
+    if is_url(query, sites=['youtube.com', 'youtu.be']):
+        try:
             requests.get(query)
+            url = query
+            
+        except requests.exceptions.InvalidSchema:
+            await ctx.edit(content=f'Hmm it seems like the URL is not valid!')
+            
+    # if not a valid URL, do search and play the first video in search result
+    if not url:
+        query_string = urllib.parse.urlencode({"search_query": query})
+        formatUrl = urllib.request.urlopen(
+            "https://www.youtube.com/results?" + query_string)
+        search_results = re.findall(
+            r"watch\?v=(\S{11})", formatUrl.read().decode())
+        url = f'https://www.youtube.com/watch?v={search_results[0]}'
 
-        # if not a valid URL, do search and play the first video in search result
-        else:
-            query_string = urllib.parse.urlencode({"search_query": query})
-            formatUrl = urllib.request.urlopen(
-                "https://www.youtube.com/results?" + query_string)
-            search_results = re.findall(
-                r"watch\?v=(\S{11})", formatUrl.read().decode())
-            url = f'https://www.youtube.com/watch?v={search_results[0]}'
-
-    except requests.exceptions.InvalidSchema:
-        await ctx.edit(content=f'Hmm it seems like the URL is not valid!')
-
-    else:  # is a valid URL, play directly
-        url = query
     # will download file here
     await session.add_to_queue(ctx, url, source='Youtube')
     if not session.voice_client.is_playing() and len(session.queue) <= 1:
@@ -936,7 +934,7 @@ if API_KEY:  # api key is given
     def generate_response(message: discord.Message, chat: Chat) -> str:
         image_urls = []
         processed_message: str = message.content
-        
+
         # IMAGE
         if message.attachments:
             # Grab the link of the images

@@ -3,6 +3,9 @@ import json
 from copy import deepcopy
 from pathlib import Path
 import re
+from dotenv import load_dotenv
+import os
+
 from urllib.request import urlopen
 from deezer.errors import DataException
 from deemix.plugins import Plugin
@@ -12,13 +15,18 @@ from deemix.errors import GenerationError, TrackNotOnDeezer, AlbumNotOnDeezer
 from deemix.types.DownloadObjects import Convertable, Collection
 
 import spotipy
-SpotifyClientCredentials = spotipy.oauth2.SpotifyClientCredentials
-CacheFileHandler = spotipy.cache_handler.CacheFileHandler
+from spotipy.oauth2 import SpotifyClientCredentials
+
+# Variables
+load_dotenv()
+SPOTIPY_CLIENT_ID = os.getenv('SPOTIPY_CLIENT_ID')
+SPOTIPY_CLIENT_SECRET = os.getenv('SPOTIPY_CLIENT_SECRET')
+SPOTIPY_REDIRECT_URI = os.getenv('SPOTIPY_REDIRECT_URI')
 
 class Spotify(Plugin):
     def __init__(self, configFolder=None):
         super().__init__()
-        self.credentials = {'clientId': "", 'clientSecret': ""}
+        self.credentials = {'clientId': SPOTIPY_CLIENT_ID, 'clientSecret': SPOTIPY_CLIENT_SECRET}
         self.settings = {
             'fallbackSearch': False
         }
@@ -362,14 +370,11 @@ class Spotify(Plugin):
             return
 
         try:
-            cache_handler = CacheFileHandler(self.configFolder / ".auth-cache")
-            client_credentials_manager = SpotifyClientCredentials(client_id=self.credentials['clientId'],
-                                                                  client_secret=self.credentials['clientSecret'],
-                                                                  cache_handler=cache_handler)
-            self.sp = spotipy.Spotify(client_credentials_manager=client_credentials_manager)
-            self.sp.user_playlists('spotify')
+            auth_manager = SpotifyClientCredentials()
+            self.sp = spotipy.Spotify(auth_manager=auth_manager)
             self.enabled = True
-        except Exception:
+        except Exception as e:
+            print(e)
             self.enabled = False
 
     def getCredentials(self):
