@@ -18,7 +18,7 @@ from zipfile import ZipFile
 
 import discord
 from bot.timer import Timer
-from bot.arls import get_arl, get_countries, load_arl
+from bot.arls import load_arl
 from bot.exceptions import *
 
 
@@ -54,7 +54,7 @@ listener = LogListener()
 plugins = {
     "spotify": Spotify(configFolder=config_path)
 }
-plugins["spotify"].setup()
+plugins['spotify'].setup()
 
 # Load account
 dz.login_via_arl(ARL)
@@ -65,6 +65,7 @@ custom_arls = {}
 
 # ------------------------------------
 
+
 class DeezerDownloader:
     def get_extension(self, format: str) -> str:
         '''format can be like mp3 320, mp3 120, flac, ...
@@ -74,7 +75,6 @@ class DeezerDownloader:
             if extension in format:
                 return extension
 
-
     def recursive_write(self, path, zip_file):
         for entry in listdir(path):
             full_path = os.path.join(path, entry)
@@ -83,9 +83,8 @@ class DeezerDownloader:
             else:
                 zip_file.write(full_path)
 
-
     def get_objects(
-        self, 
+        self,
         url: list,
         dz: Deezer | None,
         bitrate: Literal[9, 3, 1, 15, 14, 13] | None,
@@ -123,19 +122,16 @@ class DeezerDownloader:
 
         return downloadObjects
 
-
     async def init_dl(
-        self, 
+        self,
         url: str,
-        user_id: int,
+        dz: Deezer,
         format: str = 'MP3 320',
         arl_info: dict = {'arl': ARL, 'country': ARL_COUNTRY},
         settings: dict = settings
     ) -> list:
         '''Create a list of converted download objects from a Spotify/Deezer URL.
         '''
-        # Check if custom_arl
-        dz = load_arl(user_id, arl_info['arl'])
         bitrate = getBitrateNumberFromText(format)
 
         # Init objects
@@ -160,12 +156,10 @@ class DeezerDownloader:
                     )
                 converted_objs.append(obj)
 
-        # Put the normal path again
         return converted_objs
 
-
     async def download_links(
-        self, 
+        self,
         dz: Deezer,
         downloadObjects: list,
         format: str,
@@ -211,9 +205,8 @@ class DeezerDownloader:
 
         return all_data
 
-
     async def download(
-        self, 
+        self,
         downloadObjects: list,
         format: str,
         ctx: discord.ApplicationContext,
@@ -260,7 +253,7 @@ class DeezerDownloader:
                 now = datetime.now()
                 ts = datetime.timestamp(now)
                 real_final = ("./output/archives/songs/"
-                            f"Compilation {ts}.zip")
+                              f"Compilation {ts}.zip")
 
             # Init the zip file
             zip_file = ZipFile(real_final, mode='w')
@@ -283,9 +276,8 @@ class DeezerDownloader:
         else:
             return {'all_data': all_data, 'source': all_data[0]['source']}
 
-
     async def complete_dl(
-        self, 
+        self,
         ctx: discord.ApplicationContext,
         url: str,
         arl_info: dict,
@@ -297,7 +289,7 @@ class DeezerDownloader:
         '''
         downloadObjects = await self.init_dl(
             url=url,
-            user_id=ctx.user.id,
+            dz=load_arl(ctx.user.id, arl_info['arl']),
             arl_info=arl_info,
             format=format
         )

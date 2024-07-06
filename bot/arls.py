@@ -1,21 +1,11 @@
 from bs4 import BeautifulSoup
 import requests
-import discord
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 from deezer import Deezer
 from deemix.settings import load as loadSettings
-from deemix.plugins.spotify import Spotify
-from deemix.utils import formatListener
-
-class LogListener:
-    @classmethod
-    def send(cls, key, value=None):
-        logString = formatListener(key, value)
-        if logString:
-            print(logString)
 
 request = requests.get('https://rentry.org/firehawk52#deezer-arls')
 raw = BeautifulSoup(request.text, features="html.parser")
@@ -23,7 +13,6 @@ url: str = 'https://rentry.org/firehawk52#deezer-arls'
 
 
 # ----------GLOBAL SETTINGS----------
-
 
 # env things
 load_dotenv()
@@ -34,18 +23,6 @@ config_path = Path('.') / 'deemix' / 'config'
 
 # Init settings
 settings = loadSettings(config_path)
-
-# Load deezer
-dz = Deezer()
-listener = LogListener()
-plugins = {
-    "spotify": Spotify(configFolder=config_path)
-}
-plugins["spotify"].setup()
-
-# Load account
-dz.login_via_arl(ARL)
-# country = get_account_country()
 
 # Init custom arl
 custom_arls = {}
