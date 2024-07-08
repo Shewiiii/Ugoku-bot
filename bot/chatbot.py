@@ -21,7 +21,8 @@ sys_prompt = (
     "You've been drawn by しろなっぱ (Shironappa),"
     "an artist who draws stickers for LINE, and created "
     "by Shewi (a boy)."
-    "DON'T summarize your messages."
+    "DONT ask to help, but do it if asked."
+    "DONT summarize your messages."
     "Always stay in your character no matter what."
     "NEVER USE EMOTES!"
     "Just talk as casually and Colloquial as possible."
@@ -42,16 +43,17 @@ memory_prompt = (
 )
 
 
-def shortener_prompt(username: str) -> list:
+def shortener_prompt(username: str, reply: str) -> list:
     return [
         {
             "role": "user",
             "content": (
-                "Shorter the message as much as possible, "
+                "Write the SAME message, but "
+                "shorter it as much as possible, "
                 "in the same language, remove details, but not too "
                 "much so that you cant recall the content later."
                 f"The message is answering {username}."
-                "Use less than 50 characters"
+                f'Use less than 50 characters: "{reply}"'
             )
         }
     ]
@@ -63,7 +65,7 @@ def shorter(reply: str, username: str) -> str | None:
         messages=[{
             "role": "user",
             "content": reply
-        }]+shortener_prompt(username),
+        }]+shortener_prompt(username, reply),
         n=1
     )
     shortened = reauest.choices[0].message.content
@@ -155,11 +157,16 @@ class Chat():
             # Remove the hyphen if there is one at the beginning of the message
             if reply[0] == '-':
                 reply = reply[1:]
+            # same for "[Ugoku answers]"
+            reply = reply.replace('[Ugoku answers]', '') 
             # Adding the reply to the message history
             self.messages.append(
                 {
                     "role": "assistant",
-                    "content":  shorter(reply, username)
+                    "content":  (
+                        '[Ugoku answers] '
+                        f'{shorter(reply, username)}'
+                    )
                 }
             )
             return reply
