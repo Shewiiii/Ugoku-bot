@@ -14,4 +14,3 @@ yt-dlp
 openai
 spotipy
 librespot
-pandas
