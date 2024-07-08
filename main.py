@@ -14,7 +14,7 @@ from typing import Any
 
 from bot.line import get_stickerpack
 from bot.deezer import DeezerDownloader
-from bot.spotify import Spotify_
+from bot.spotify import Spotify_, spotify_enabled
 from bot.exceptions import *
 from bot.settings import *
 from bot.arls import *
@@ -405,11 +405,13 @@ class YTDLSource(Source):
             metadata = metadata['entries'][0]
         filename = metadata['url'] if stream else ytdl.prepare_filename(
             metadata)
-        print(filename)
-        return cls(await discord.FFmpegOpusAudio.from_probe(
-            filename,
-            **ffmpeg_options,),
-            metadata)
+        return cls(
+            await discord.FFmpegOpusAudio.from_probe(
+                filename,
+                **ffmpeg_options,
+            ),
+            metadata
+        )
 
 
 class ServerSession:
@@ -420,7 +422,6 @@ class ServerSession:
         self.to_loop = []
         self.loop_current = False
         self.loop_queue = False
-        self.temp_source: BytesIO = None
 
     def display_queue(
         self
@@ -439,7 +440,7 @@ class ServerSession:
         for i, s in enumerate(self.queue[1:], start=1):
             title = s['element']['display_name']
             elements.append(f"{i}. {title} ({s['source']})\n")
-        
+
         # Show the songs in the loop (if there are)
         if self.to_loop:
             elements.append('Songs in loop: \n')
@@ -456,7 +457,7 @@ class ServerSession:
         # platform source
         queue_thing = self.queue[0]
         print(queue_thing)
-        
+
         # Deezer, Spotify or Youtube
         source = queue_thing['source']
 
@@ -472,7 +473,7 @@ class ServerSession:
                 "Now playing: "
                 f"{queue_thing['element']['display_name']}"
             )
-        
+
         # Play audio from a source file
         self.voice_client.play(
             discord.FFmpegOpusAudio(
@@ -642,6 +643,10 @@ async def play_deezer(ctx: discord.ApplicationContext, query: str) -> None:
                 await session.start_playing(ctx)
 
         except TrackNotFound:
+            if not spotify_enabled:
+                await ctx.respond('Track not found !')
+                return
+
             await ctx.edit(
                 content='Track not found on Deezer, searching on Spotify...'
             )
@@ -707,6 +712,9 @@ async def play(
             )
 
     elif source.lower() == 'spotify':
+        if not spotify_enabled:
+            await ctx.respond('Spotify features are not enabled.')
+            return
         try:
             await play_spotify(ctx, query, successor=False)
         except TrackNotFound:
@@ -810,7 +818,7 @@ async def clear(
     if guild_id in server_sessions:
         voice_client = server_sessions[guild_id].voice_client
         server_sessions[guild_id].queue = []
-        server_sessions[guild_id].to_loop= []
+        server_sessions[guild_id].to_loop = []
         if voice_client.is_playing():
             voice_client.stop()
         await ctx.respond('Queue cleared !')

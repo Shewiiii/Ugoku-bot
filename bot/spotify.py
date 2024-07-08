@@ -29,9 +29,13 @@ ogg_path.mkdir(parents=True, exist_ok=True)
 
 # Init session
 # librespot
-session = Session.Builder() \
-    .user_pass(SPOTIFY_USERNAME, SPOTIFY_PASSWORD) \
-    .create()
+try:
+    session = Session.Builder() \
+        .user_pass(SPOTIFY_USERNAME, SPOTIFY_PASSWORD) \
+        .create()
+    spotify_enabled = True
+except Session.SpotifyAuthenticationException:
+    spotify_enabled = False
 
 # Spotipy
 auth_manager = SpotifyClientCredentials()
@@ -53,13 +57,12 @@ class Spotify_:
         source: bytes = stream.input_stream.stream().read()
         return source
 
-    def write_track_from_source(self, display_name: str, source: bytes, file_path: str) -> None:
+    def write_track_from_source(self, source: bytes, file_path: str) -> None:
         '''Write an OGG file from bytes.
         '''
         if not os.path.isfile(file_path):
             with open(file_path, 'wb') as audio_file:
                 audio_file.write(source)
-
 
     async def get_track_name(self, id: str) -> str | None:
         try:
@@ -161,10 +164,10 @@ class Spotify_:
         '''
         display_name: str = await self.get_track_name(id)
         file_path = ogg_path / f'{display_name}.ogg'
-        
+
         if not os.path.isfile(file_path):
             source: BytesIO = await self.get_track_source(id)
-            self.write_track_from_source(display_name, source, file_path)
+            self.write_track_from_source(source, file_path)
 
         info_dict = {
             'display_name': display_name,
