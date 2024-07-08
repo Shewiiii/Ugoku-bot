@@ -12,6 +12,7 @@ from io import BytesIO
 import re
 from dotenv import load_dotenv
 import os
+from pathlib import Path
 
 
 load_dotenv()
@@ -22,6 +23,9 @@ SPOTIFY_PASSWORD = os.getenv('SPOTIFY_PASSWORD')
 SPOTIPY_CLIENT_ID = os.getenv('SPOTIPY_CLIENT_ID')
 SPOTIPY_CLIENT_SECRET = os.getenv('SPOTIPY_CLIENT_SECRET')
 SPOTIPY_REDIRECT_URI = os.getenv('SPOTIPY_REDIRECT_URI')
+
+ogg_path = Path('.') / 'output' / 'vc_songs' / 'OGG'
+ogg_path.mkdir(parents=True, exist_ok=True)
 
 # Init session
 # librespot
@@ -36,7 +40,7 @@ sp = spotipy.Spotify(auth_manager=auth_manager)
 
 class Spotify_:
 
-    async def get_track_source(self, id: str) -> BytesIO | None:
+    async def get_track_source(self, id: str) -> bytes:
         '''Get the data of a track from a single ID.
         Returns an info dictionary.
         '''
@@ -47,8 +51,15 @@ class Spotify_:
         )
 
         source: bytes = stream.input_stream.stream().read()
-        io_source = BytesIO(source)
-        return io_source
+        return source
+
+    def write_track_from_source(self, display_name: str, source: bytes, file_path: str) -> None:
+        '''Write an OGG file from bytes.
+        '''
+        if not os.path.isfile(file_path):
+            with open(file_path, 'wb') as audio_file:
+                audio_file.write(source)
+
 
     async def get_track_name(self, id: str) -> str | None:
         try:
@@ -146,13 +157,17 @@ class Spotify_:
 
     # ..And that one :elaina_magic:
     async def get_track(self, id: str) -> dict[str, BytesIO] | None:
-        '''Returns a info dictionary {'display_name': str, 'source': BytesIO}
+        '''Returns a info dictionary {'display_name': str, 'source': str (the path)}
         '''
         display_name: str = await self.get_track_name(id)
-        source: BytesIO = await self.get_track_source(id)
+        file_path = ogg_path / f'{display_name}.ogg'
+        
+        if not os.path.isfile(file_path):
+            source: BytesIO = await self.get_track_source(id)
+            self.write_track_from_source(display_name, source, file_path)
 
         info_dict = {
             'display_name': display_name,
-            'source': source,
+            'source': file_path,
         }
         return info_dict

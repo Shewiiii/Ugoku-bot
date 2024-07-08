@@ -17,7 +17,6 @@ My first discord bot !
 
 - Finish the music player:
   - Add the possibility to play any uploaded file (for Yuuka-chan ~)
-  - Add a loop feature
   - Improve queue design, add markdowns.
   - ...
 - Add download modes (eg. upload songs one by one for albums/playlists).
@@ -25,5 +24,6 @@ My first discord bot !
 ## Known bugs:
 
 - Clips at default volume (because of the lack of volume control with opus format).
+- The *Commands* section can't be opened in the help embed, because of the text length.
 
 Most of the code of the player comes from [this github gist](https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5) !
