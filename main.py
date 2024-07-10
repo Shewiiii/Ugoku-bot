@@ -421,6 +421,10 @@ class ServerSession:
         self.to_loop = []
         self.loop_current = False
         self.loop_queue = False
+        self.skipped = False
+        # When skipping while looping current, that variable will be
+        # True, so it tells the discord_play method that the song has been
+        # skipped, and that that it has to show the "Now playing" message
 
     def display_queue(
         self
@@ -464,13 +468,15 @@ class ServerSession:
                     f"{queue_thing['element']['display_name']}"
                 )
             )
-        elif not successor and not self.loop_current:
-            await ctx.send(
-                "Now playing: "
-                f"{queue_thing['element']['display_name']}"
-            )
+        else:
+            if not self.loop_current or self.skipped:
+                await ctx.send(
+                    "Now playing: "
+                    f"{queue_thing['element']['display_name']}"
+                )
 
         # Play audio from a source file
+        self.skipped = False
         self.voice_client.play(
             discord.FFmpegOpusAudio(
                 # Audio source
@@ -752,11 +758,15 @@ async def resume(ctx: discord.ApplicationContext):
 async def skip(ctx: discord.ApplicationContext):
     guild_id = ctx.guild.id
     if guild_id in server_sessions:
-        session = server_sessions[guild_id]
+        session: ServerSession = server_sessions[guild_id]
         voice_client = session.voice_client
         if voice_client.is_playing():
             if len(session.queue) > 0:
+                if session.loop_current:
+                    session.queue.pop(0)
+                session.skipped = True
                 voice_client.stop()
+
                 await ctx.respond('Skipped !')
             else:
                 await ctx.respond('No songs in queue !')
