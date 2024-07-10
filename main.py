@@ -464,20 +464,15 @@ class ServerSession:
         # platform source
         queue_thing = self.queue[0]
         print(queue_thing)
-
+        title = queue_thing['element']['display_name']
+        url = queue_thing['element']['url']
+        string = f'Now playing: [{title}](<{url}>)'
+        
         if successor:
-            await ctx.edit(
-                content=(
-                    "Now playing: "
-                    f"{queue_thing['element']['display_name']}"
-                )
-            )
+            await ctx.edit(content=string)
         else:
             if not self.loop_current or self.skipped:
-                await ctx.send(
-                    "Now playing: "
-                    f"{queue_thing['element']['display_name']}"
-                )
+                await ctx.send(string)
 
         # Play audio from a source file
         self.skipped = False
@@ -501,8 +496,10 @@ class ServerSession:
         self.queue.append(queue_thing)
 
         if len(self.queue) > 1:
+            title = element['display_name']
+            url = element['url']
             await ctx.edit(
-                content=f"Added to queue: {element['display_name']} !"
+                content=f"Added to queue: [{title}](<{url}>) !"
             )
 
     async def start_playing(

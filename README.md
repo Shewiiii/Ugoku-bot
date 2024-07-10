@@ -17,7 +17,7 @@ My first discord bot !
 
 - Finish the music player:
   - Add the possibility to play any uploaded file (for Yuuka-chan ~)
-  - Improve queue design, add markdowns.
+  - Add embeds
   - ...
 - Add download modes (eg. upload songs one by one for albums/playlists).
 
