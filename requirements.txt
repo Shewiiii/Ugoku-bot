@@ -1,16 +1,25 @@
-click 
-pycryptodomex
-mutagen
+py-cord == 2.6.0
+protobuf==3.20.*
 requests
-deezer-py
 spotipy>=2.11.0
-py-cord
 requests
 bs4
-apnggif
 python-dotenv
-PyNaCl
 yt-dlp
 openai
 spotipy
 librespot
+
+# Deemix dependencies
+click 
+pycryptodomex
+deezer-py
+mutagen
+PyNaCl
+
+# If you get error even though you have Microsoft visual C++, install it afterwards. 
+# apnggif
+
+# .venv\Scripts\activate.bat
+# pip install -r requirements.txt --no-cache-dir
+# pip install apnggif
