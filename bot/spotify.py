@@ -172,5 +172,6 @@ class Spotify_:
         info_dict = {
             'display_name': display_name,
             'source': file_path,
+            'url': f'https://open.spotify.com/track/{id}'
         }
         return info_dict

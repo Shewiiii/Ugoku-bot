@@ -433,23 +433,27 @@ class ServerSession:
             return 'No songs in queue !'
 
         # Currently playing
-        title = self.queue[0]['element']['display_name']
+        s = self.queue[0]
+        title = s['element']['display_name']
+        url = s['element']['url']
         elements = [
             "Currently playing: "
-            f"{title} ({self.queue[0]['source']})\n"
+            f"[{title}](<{url}>) ({s['source']})\n"
         ]
 
-        # The actual list
+        # The actual list (i=index, s=song)
         for i, s in enumerate(self.queue[1:], start=1):
             title = s['element']['display_name']
-            elements.append(f"{i}. {title} ({s['source']})\n")
+            url = s['element']['url']
+            elements.append(f"{i}. [{title}](<{url}>) ({s['source']})\n")
 
         # Show the songs in the loop (if there are)
         if self.to_loop:
             elements.append('Songs in loop: \n')
             for i, s in enumerate(self.to_loop, start=1):
                 title = s['element']['display_name']
-                elements.append(f"{i}. {title} ({s['source']})\n")
+                url = s['element']['url']
+                elements.append(f"{i}. [{title}](<{url}>) ({s['source']})\n")
         return ''.join(elements)
 
     async def discord_play(
@@ -490,20 +494,9 @@ class ServerSession:
         self,
         ctx: discord.ApplicationContext,
         element: dict | str,
+        #
         source: str | None = None
     ) -> None:  # does not auto start playing the playlist
-        # Basically element is a string is youtube, or a dict if from Deezer..
-        if source == 'Youtube':
-            yt_src = await YTDLSource.from_url(
-                element,
-                loop=bot.loop,
-                stream=False
-            )
-            filename = f"{yt_src.metadata['id']}.{yt_src.metadata['ext']}"
-            element = {
-                'display_name': yt_src.title,
-                'source': yt_path / filename
-            }
         queue_thing = {'element': element, 'source': source}
         self.queue.append(queue_thing)
 
@@ -639,6 +632,8 @@ async def play_deezer(ctx: discord.ApplicationContext, query: str) -> None:
                 format=format
             )
             info_dict = all_data[0]
+            # Add Spotify URL
+            info_dict['url'] = url
             await session.add_to_queue(ctx, info_dict, source='Deezer')
             if not session.voice_client.is_playing() and len(session.queue) <= 1:
                 await session.start_playing(ctx)
@@ -896,8 +891,22 @@ async def play_from_youtube(
             r"watch\?v=(\S{11})", formatUrl.read().decode())
         url = f'https://www.youtube.com/watch?v={search_results[0]}'
 
+
+    yt_src = await YTDLSource.from_url(
+        url,
+        loop=bot.loop,
+        stream=False
+    )
+    filename = f"{yt_src.metadata['id']}.{yt_src.metadata['ext']}"
+    
+    info_dict = {
+        'display_name': yt_src.title,
+        'source': yt_path / filename,
+        'url': url
+    }
+    
     # will download file here
-    await session.add_to_queue(ctx, url, source='Youtube')
+    await session.add_to_queue(ctx, info_dict, source='Youtube')
     if not session.voice_client.is_playing() and len(session.queue) <= 1:
         await session.start_playing(ctx)
 
