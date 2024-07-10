@@ -8,7 +8,6 @@ import urllib
 import re
 import logging
 import os
-from io import BytesIO
 from dotenv import load_dotenv
 from typing import Any
 
@@ -458,9 +457,6 @@ class ServerSession:
         queue_thing = self.queue[0]
         print(queue_thing)
 
-        # Deezer, Spotify or Youtube
-        source = queue_thing['source']
-
         if successor:
             await ctx.edit(
                 content=(
@@ -468,7 +464,7 @@ class ServerSession:
                     f"{queue_thing['element']['display_name']}"
                 )
             )
-        else:
+        elif not successor and not self.loop_current:
             await ctx.send(
                 "Now playing: "
                 f"{queue_thing['element']['display_name']}"
@@ -523,12 +519,11 @@ class ServerSession:
     ) -> None:
         if error:
             raise error
-        else:
-            if self.queue:
-                asyncio.run_coroutine_threadsafe(
-                    self.play_next(ctx),
-                    bot.loop
-                )
+        if self.queue:
+            asyncio.run_coroutine_threadsafe(
+                self.play_next(ctx),
+                bot.loop
+            )
 
     # should be called only after making the
     # first element of the queue the song to play
