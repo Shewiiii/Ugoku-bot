@@ -467,7 +467,7 @@ class ServerSession:
         title = queue_thing['element']['display_name']
         url = queue_thing['element']['url']
         string = f'Now playing: [{title}](<{url}>)'
-        
+
         if successor:
             await ctx.edit(content=string)
         else:
@@ -544,64 +544,52 @@ class ServerSession:
         await self.discord_play(ctx=ctx)
 
 
-@vc.command(
-    name='join',
-    description='Invite Ugoku in your voice channel !'
-)
-async def join(
-    ctx: discord.ApplicationContext,
-    channel: discord.VoiceChannel,
-) -> None:
+async def connect(ctx: discord.ApplicationContext) -> ServerSession | None:
+    voice = ctx.user.voice
+    if not ctx.user.voice:
+        return
+    channel = voice.channel
     if ctx.voice_client is not None:
         await ctx.voice_client.move_to(channel)
     else:
         await channel.connect()
 
     if ctx.voice_client.is_connected():
+        if ctx.guild.id in server_sessions:
+            return server_sessions[ctx.guild.id]
         server_sessions[ctx.guild.id] = ServerSession(
             ctx.guild.id,
             ctx.voice_client
         )
         return server_sessions[ctx.guild.id]
     else:
-        await ctx.edit(content=f'Failed to connect to voice channel {ctx.user.voice.channel.name}.')
-
-
-async def connect(ctx: discord.ApplicationContext) -> ServerSession | None:
-    guild_id = ctx.guild.id
-    if guild_id not in server_sessions or not ctx.user.voice:
-        # not connected to any VC
-        if ctx.user.voice is None:
-            await ctx.respond(
-                content=f'You are not connected to any voice channel !'
-            )
-            return
-        else:
-            session: ServerSession = await join(
-                ctx,
-                ctx.user.voice.channel
-            )
-
-    else:  # is connected to a VC
-        session = server_sessions[guild_id]
-        if session.voice_client.channel != ctx.user.voice.channel:
-            # connected to a different VC than the command issuer
-            # (but within the same server)
-            await session.voice_client.move_to(ctx.user.voice.channel)
-
-    return session
-
-
-async def play_deezer(ctx: discord.ApplicationContext, query: str) -> None:
-    # Join
-    session: ServerSession | None = await connect(ctx)
-    # Get urls from query with the Spotify_ wrapper
-    urls: list = await spotify.get_track_urls(query)
-    if not session or not urls:
         return
 
+
+@vc.command(
+    name='join',
+    description='Invite Ugoku in your voice channel !'
+)
+async def join(ctx: discord.ApplicationContext) -> None:
+    session = await connect(ctx)
+    if session:
+        await ctx.respond(f'Connected to {ctx.user.voice.channel} !')
+    else:
+        await ctx.respond(f'You are not connected to any vc.')
+
+
+async def play_deezer(
+    ctx: discord.ApplicationContext,
+    query: str,
+    session: ServerSession
+) -> None:
+    # Get urls from query with the Spotify_ wrapper
+    urls: list = await spotify.get_track_urls(query)
+    if not urls:
+        raise TrackNotFound
+
     # Connecting
-    await ctx.respond(f'Connecting to Deezer...')
+    await ctx.edit(content=f'Connecting to Deezer...')
     arl_info = get_setting(
         ctx.author.id,
         'publicArl',
@@ -639,31 +627,24 @@ async def play_deezer(ctx: discord.ApplicationContext, query: str) -> None:
             if not spotify_enabled:
                 await ctx.respond('Track not found !')
                 return
-
             await ctx.edit(
                 content='Track not found on Deezer, searching on Spotify...'
             )
-            await play_spotify(ctx, user_input=url, successor=True)
+            await play_spotify(ctx, url, session)
 
 
 async def play_spotify(
     ctx: discord.ApplicationContext,
     user_input: str,
-    successor: bool = False
+    session: ServerSession
 ) -> None:
-    session: ServerSession | None = await connect(ctx)
-    if not session:
-        raise TrackNotFound
-
-    # Only show that message if
-    if not successor:
-        await ctx.respond('Give me a second !')
     ids: list | None = await spotify.get_track_ids(user_input)
     if not ids:
         await ctx.edit(content='Track not found !')
         return
 
     for id in ids:
+        await ctx.edit(content=f'Getting the song...')
         info_dict: dict = await spotify.get_track(id)
         await session.add_to_queue(ctx, info_dict, source='Spotify')
         if not session.voice_client.is_playing() and len(session.queue) <= 1:
@@ -693,28 +674,28 @@ async def play(
     query: str,
     source: str | None = None
 ) -> None:
+    await ctx.respond('Give me a second !')
+    session = await connect(ctx)
+    if not session:
+        await ctx.edit(content='You are not connected to any vc.')
+
     if not source:
         source = get_setting(ctx.author.id, 'defaultMusicService', 'Spotify')
 
     if source.lower() == 'deezer':
-        try:
-            await play_deezer(ctx, query)
-        except TrackNotFound:
-            await ctx.edit(
-                content='Track not found !'
-            )
+        await play_deezer(ctx, query, session)
 
     elif source.lower() == 'spotify':
         if not spotify_enabled:
-            await ctx.respond('Spotify features are not enabled.')
+            await ctx.edit(content='Spotify features are not enabled.')
             return
         try:
-            await play_spotify(ctx, query, successor=False)
+            await play_spotify(ctx, query, session)
         except TrackNotFound:
             await ctx.edit(content='Track not found on Spotify !')
 
     else:
-        await ctx.respond('wut duh')
+        await ctx.edit(content='wut duh')
 
 
 @vc.command(
@@ -831,6 +812,7 @@ async def leave(
     if guild_id in server_sessions:
         voice_client: discord.voice_client.VoiceClient = server_sessions[guild_id].voice_client
         await voice_client.disconnect()
+        voice_client.cleanup()
         del server_sessions[guild_id]
         await ctx.respond(f'Baibai !')
 
@@ -888,20 +870,19 @@ async def play_from_youtube(
             r"watch\?v=(\S{11})", formatUrl.read().decode())
         url = f'https://www.youtube.com/watch?v={search_results[0]}'
 
-
     yt_src = await YTDLSource.from_url(
         url,
         loop=bot.loop,
         stream=False
     )
     filename = f"{yt_src.metadata['id']}.{yt_src.metadata['ext']}"
-    
+
     info_dict = {
         'display_name': yt_src.title,
         'source': yt_path / filename,
         'url': url
     }
-    
+
     # will download file here
     await session.add_to_queue(ctx, info_dict, source='Youtube')
     if not session.voice_client.is_playing() and len(session.queue) <= 1:
