@@ -294,19 +294,16 @@ async def default_music_format(
 @discord.option(
     'service',
     type=discord.SlashCommandOptionType.string,
-    description=(
-        'The music streaming service. '
-        'Spotify: wider library, Deezer: even better audio quality.'
-    ),
+    description='The music streaming service.',
     autocomplete=discord.utils.basic_autocomplete(
-        ['Spotify', 'Deezer']),
+        ['Spotify', 'Deezer', 'Youtube']),
 )
 async def default_music_service(
     ctx: discord.ApplicationContext,
     service: str
 ) -> None:
-    if service.lower() not in ['spotify', 'deezer']:
-        await ctx.respond('Please select a valid format !')
+    if service.lower() not in ['spotify', 'deezer', 'youtube']:
+        await ctx.respond('Please select a valid service !')
     else:
         await change_settings(
             ctx.author.id,
@@ -635,10 +632,10 @@ async def play_deezer(
 
 async def play_spotify(
     ctx: discord.ApplicationContext,
-    user_input: str,
+    query: str,
     session: ServerSession
 ) -> None:
-    ids: list | None = await spotify.get_track_ids(user_input)
+    ids: list | None = await spotify.get_track_ids(query)
     if not ids:
         await ctx.edit(content='Track not found !')
         return
@@ -649,6 +646,53 @@ async def play_spotify(
         await session.add_to_queue(ctx, info_dict, source='Spotify')
         if not session.voice_client.is_playing() and len(session.queue) <= 1:
             await session.start_playing(ctx)
+
+
+# Still mainly from
+# https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5
+# For Ika and Laser xD
+async def play_youtube(
+    ctx: discord.ApplicationContext,
+    query: str,
+    session: ServerSession
+) -> None:
+    # Connect
+    url = None
+
+    await ctx.edit(content='Downloading the audio...')
+    if is_url(query, sites=['youtube.com', 'youtu.be']):
+        try:
+            requests.get(query)
+            url = query
+
+        except requests.exceptions.InvalidSchema:
+            await ctx.edit(content=f'Hmm it seems like the URL is not valid!')
+
+    # if not a valid URL, do search and play the first video in search result
+    if not url:
+        query_string = urllib.parse.urlencode({"search_query": query})
+        formatUrl = urllib.request.urlopen(
+            "https://www.youtube.com/results?" + query_string)
+        search_results = re.findall(
+            r"watch\?v=(\S{11})", formatUrl.read().decode())
+        url = f'https://www.youtube.com/watch?v={search_results[0]}'
+
+    yt_src = await YTDLSource.from_url(
+        url,
+        loop=bot.loop,
+        stream=False
+    )
+    filename = f"{yt_src.metadata['id']}.{yt_src.metadata['ext']}"
+
+    info_dict = {
+        'display_name': yt_src.title,
+        'source': yt_path / filename,
+        'url': url
+    }
+
+    await session.add_to_queue(ctx, info_dict, source='Youtube')
+    if not session.voice_client.is_playing() and len(session.queue) <= 1:
+        await session.start_playing(ctx)
 
 server_sessions: dict[ServerSession] = {}
 
@@ -665,9 +709,9 @@ server_sessions: dict[ServerSession] = {}
 @discord.option(
     'source',
     type=discord.SlashCommandOptionType.string,
-    description='Source of the song (Deezer: better audio, Spotify: better library).',
+    description='Source of the song.',
     autocomplete=discord.utils.basic_autocomplete(
-        ['Deezer', 'Spotify']),
+        ['Deezer', 'Spotify', 'Youtube']),
 )
 async def play(
     ctx: discord.ApplicationContext,
@@ -683,7 +727,17 @@ async def play(
         source = get_setting(ctx.author.id, 'defaultMusicService', 'Spotify')
 
     if source.lower() == 'deezer':
-        await play_deezer(ctx, query, session)
+        try:
+            await play_deezer(ctx, query, session)
+        # If not urls
+        except TrackNotFound:
+            if not spotify_enabled:
+                await ctx.respond('Track not found !')
+                return
+            await ctx.edit(
+                content='Track not found on Deezer, searching on Spotify...'
+            )
+            await play_spotify(ctx, url, session)
 
     elif source.lower() == 'spotify':
         if not spotify_enabled:
@@ -693,6 +747,9 @@ async def play(
             await play_spotify(ctx, query, session)
         except TrackNotFound:
             await ctx.edit(content='Track not found on Spotify !')
+
+    elif source.lower() == 'youtube':
+        await play_youtube(ctx, query, session)
 
     else:
         await ctx.edit(content='wut duh')
@@ -828,65 +885,6 @@ async def channel_bitrate(
         await ctx.respond(f'{ctx.author.voice.channel.bitrate//1000}kbps.')
     else:
         await ctx.respond(f'You are not in a voice channel !')
-
-
-# Still mainly from
-# https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5
-# For Ika and Laser xD
-@vc.command(
-    name='play-from-youtube',
-    description='Play any videos from Youtube !'
-)
-@discord.option(
-    'query',
-    type=discord.SlashCommandOptionType.string,
-    description='URL or a search query.'
-)
-async def play_from_youtube(
-    ctx: discord.ApplicationContext,
-    query: str
-) -> None:
-    # Connect
-    session: ServerSession | None = await connect(ctx)
-    url = None
-    if not session:
-        return
-
-    await ctx.respond('Downloading the audio...')
-    if is_url(query, sites=['youtube.com', 'youtu.be']):
-        try:
-            requests.get(query)
-            url = query
-
-        except requests.exceptions.InvalidSchema:
-            await ctx.edit(content=f'Hmm it seems like the URL is not valid!')
-
-    # if not a valid URL, do search and play the first video in search result
-    if not url:
-        query_string = urllib.parse.urlencode({"search_query": query})
-        formatUrl = urllib.request.urlopen(
-            "https://www.youtube.com/results?" + query_string)
-        search_results = re.findall(
-            r"watch\?v=(\S{11})", formatUrl.read().decode())
-        url = f'https://www.youtube.com/watch?v={search_results[0]}'
-
-    yt_src = await YTDLSource.from_url(
-        url,
-        loop=bot.loop,
-        stream=False
-    )
-    filename = f"{yt_src.metadata['id']}.{yt_src.metadata['ext']}"
-
-    info_dict = {
-        'display_name': yt_src.title,
-        'source': yt_path / filename,
-        'url': url
-    }
-
-    # will download file here
-    await session.add_to_queue(ctx, info_dict, source='Youtube')
-    if not session.voice_client.is_playing() and len(session.queue) <= 1:
-        await session.start_playing(ctx)
 
 
 @vc.command(
