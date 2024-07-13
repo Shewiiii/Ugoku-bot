@@ -1021,18 +1021,22 @@ if API_KEY:  # api key is given
         message: discord.Message
     ) -> None:
         if can_use_chatbot(message):
+                
             # Create a new chat if needed
             if not message.guild.id in active_chats:
                 Chat(message.guild.id)
             chat: Chat = active_chats[message.guild.id]
 
+            # I'm planning to remove the image generation feature,
+            # as it is very cursed and expensive
             if '-draw' in message.content.lower():
                 results = chat.draw(
                     message.content, message.author.display_name)
                 await message.channel.send(results['image_url'])
                 await message.channel.send(results['reply'])
             else:
-                reply = generate_response(message, chat)
+                async with message.channel.typing():
+                    reply = generate_response(message, chat)
                 await message.channel.send(reply)
 
 
