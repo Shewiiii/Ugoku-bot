@@ -159,8 +159,10 @@ class Chat():
             # Remove the hyphen if there is one at the beginning of the message
             if reply[0] == '-':
                 reply = reply[1:]
-            # same for "[Ugoku answers]"
-            reply = reply.replace('[Ugoku answers]', '') 
+
+            # same for "[a random context message]"
+            reply = re.sub(r'\[.*?\]', '', reply)
+
             # Adding the reply to the message history
             self.messages.append(
                 {
