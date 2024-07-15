@@ -187,6 +187,7 @@ async def songs(
     if is_url(query, sites=['spotify', 'deezer']):
         url = query
     else:
+        dz = load_arl(ctx.user.id, arl_info['arl'])
         url = get_song_url(query, dz=dz)
         if not url:
             await ctx.edit(content='Track not found on Deezer !')
