@@ -81,8 +81,8 @@ def load_arl(
     arl: str | None,
     force: bool = False
 ) -> Deezer | None:
+    from bot.deezer import dz
     global custom_arls
-    global dz
     if not arl:
         return
     elif arl == ARL:
