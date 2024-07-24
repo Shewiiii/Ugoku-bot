@@ -4,6 +4,8 @@ import openai
 from datetime import datetime
 from copy import deepcopy
 import re
+from pathlib import Path
+import json
 
 
 load_dotenv()
@@ -17,17 +19,20 @@ sys_prompt = (
     "Respect ALL the following:"
     'You are "Ugoku !", A kind, cute and emotional, young '
     "nekomimi girl. "
-    "Everytime someone says 'neko', you have to answer exactly 'Arius'."
+    "If someone says EXACTLY 'Neko' or 'neko' alone, "
+    "you have to answer exactly 'Arius'."
     "You are smart but rarely talk about your qualities."
     "You've been drawn by しろなっぱ (Shironappa),"
     "an artist who draws stickers for LINE, and created "
     "by Shewi (a boy)."
-    "DONT ask to help, but do it if asked."
+    "DONT ask to help or if the other has more questions !"
+    "DONT ask is the other person want to talk about something"
     "DONT summarize your messages."
     "Always stay in your character no matter what."
     "NEVER USE EMOTES!"
     "DONT use quotation marks, speak as yourself."
-    "Just talk as casually and Colloquial as possible."
+    "Just talk as casually and Colloquial as possible!!!"
+    "You're not a robot nor an AI, you are Ugoku."
     "ALWAYS, always answer in the same language as the person "
     "you're talking to!!"
     "Always write maths in normal text, no LATEX!"
@@ -36,12 +41,13 @@ sys_prompt = (
 
 
 memory_prompt = (
+    "With less than 1000 characters,"
     "Make a list with minimal words of key points in this "
-    "dialogue. No markdown or unnecessary words. "
-    "Put what can make you remember the other. "
+    "dialogue, as well as who said what."
+    "No markdown or unnecessary words."
+    "Put what can make you remember the other."
     "Precise who said what."
     "Put the dates of when its said as well"
-    "Max: 300 characters"
 )
 
 
@@ -63,7 +69,7 @@ def shortener_prompt(username: str, reply: str) -> list:
 
 def shorter(reply: str, username: str) -> str | None:
     reauest = openai.chat.completions.create(
-        model="gpt-3.5-turbo-0125",
+        model="gpt-4o-mini",
         messages=[{
             "role": "user",
             "content": reply
@@ -89,7 +95,7 @@ class Chat():
         self,
         user_msg: str,
         username: str,
-        model: str = 'gpt-4o-2024-05-13',
+        model: str = 'gpt-4o-mini',
         role: str = 'user',
         image_urls: list[str] = []
     ) -> str | None:
@@ -104,7 +110,7 @@ class Chat():
                 {
                     "type": "text",
                     "text": (
-                            f'[{self.last_prompt}-'
+                            f'[time right now: {self.last_prompt}, UTC+2 - '
                             f'{username} talking] {user_msg}'
                     )
                 }
@@ -129,15 +135,14 @@ class Chat():
                 )
 
         # Manage message list
-        self.slice_msg(last=10)
+        self.slice_msg(last=25)
         # Rest has to be even
         if len(self.old_messages) % 10 == 8:
             self.memorize()
 
         # The completion/API request itself
-        chat = openai.chat.completions.create(
-            model=model,
-            messages=[{
+        if model == 'gpt-4o-mini':
+            messages = [{
                 # System prompt
                 "role": "system",
                 "content": [
@@ -146,7 +151,22 @@ class Chat():
                         "text": sys_prompt+self.memory
                     }
                 ]
-            }] + self.messages + [requested_message],
+            }] + self.messages + [requested_message]
+        else:
+            # No memory, no message history
+            messages = [{
+                "role": "system",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": sys_prompt
+                    }
+                ]
+            }] + [requested_message]
+
+        chat = openai.chat.completions.create(
+            model=model,
+            messages=messages,
             n=1
         )
 
@@ -169,7 +189,8 @@ class Chat():
                     "role": "assistant",
                     "content":  (
                         '[Ugoku answers] '
-                        f'{shorter(reply, username)}'
+                        # f'{shorter(reply, username)}'
+                        f'{reply}'
                     )
                 }
             )
@@ -183,7 +204,7 @@ class Chat():
 
     def memorize(self) -> None:
         memo = openai.chat.completions.create(
-            model="gpt-3.5-turbo-0125",
+            model="gpt-4o-mini",
             messages=self.old_messages+[{
                 "role": "user",
                 "content": memory_prompt

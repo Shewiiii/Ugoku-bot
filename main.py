@@ -1009,11 +1009,20 @@ if API_KEY:  # api key is given
             sticker: discord.StickerItem = message.stickers[0]
             image_urls.append(sticker.url)
 
+        # Keywords to trigger GPT-4o (instead)
+        if any([word in processed_message for word in ['time', 'solve', 'math', 'write']]):
+            model = 'gpt-4o'
+            logging.info(f'Using gpt-4o, no memory: {processed_message}')
+        else:
+            model = 'gpt-4o-mini'
+            logging.info(f'Using gpt-4o-mini: {processed_message}')
+
         # REPLY
         reply = chat.prompt(
             user_msg=processed_message[1:],
             username=message.author.display_name,
-            image_urls=image_urls
+            image_urls=image_urls,
+            model=model
         )
         return reply
 
@@ -1022,7 +1031,6 @@ if API_KEY:  # api key is given
         message: discord.Message
     ) -> None:
         if can_use_chatbot(message):
-                
             # Create a new chat if needed
             if not message.guild.id in active_chats:
                 Chat(message.guild.id)
