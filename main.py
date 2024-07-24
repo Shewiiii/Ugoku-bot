@@ -1037,16 +1037,15 @@ if API_KEY:  # api key is given
             chat: Chat = active_chats[message.guild.id]
 
             lowered_message = message.content.lower()
-            # I'm planning to remove the image generation feature,
-            # as it is very cursed and expensive
-
-            if '-draw' in lowered_message:
-                results = chat.draw(
-                    message.content, message.author.display_name)
-                await message.channel.send(results['image_url'])
-                await message.channel.send(results['reply'])
+            
+            # if '-draw' in lowered_message:
+            #     results = chat.draw(
+            #         message.content, message.author.display_name)
+            #     await message.channel.send(results['image_url'])
+            #     await message.channel.send(results['reply'])
                 
-            elif '-neko' in lowered_message:
+            # elif '-neko' in lowered_message:
+            if '-neko' in lowered_message:
                 await message.channel.send('Arius')
                 
             else:

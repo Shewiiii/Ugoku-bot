@@ -226,7 +226,7 @@ class Chat():
 
         response = client.images.generate(
             model="dall-e-3",
-            prompt=f'{prompt}, anime style',
+            prompt=f'{prompt}, modern anime style',
             # Because Ugoku (???)
             size="1024x1024",
             quality="hd",
