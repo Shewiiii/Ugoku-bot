@@ -22,11 +22,10 @@ async def change_settings(
     with open(path, 'r') as json_file:
         settings = json.load(json_file)
 
-    # Change value
-    settings[setting][str(id)] = value
+        # Change value
+        settings[setting][str(id)] = value
 
-    # Write new data
-    with open(path, 'w') as json_file:
+        # Write new data
         json.dump(settings, json_file)
 
 
@@ -51,9 +50,9 @@ def get_setting(
         with open(path, 'w') as json_file:
             json.dump(settings, json_file)
         return default
- 
+
 
 def get_list(setting: str) -> list:
     with open(settings_path, 'r') as json_file:
-            settings = json.load(json_file)
-            return settings[setting]
+        settings = json.load(json_file)
+        return settings[setting]
