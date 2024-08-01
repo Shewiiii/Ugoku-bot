@@ -4,8 +4,6 @@ import openai
 from datetime import datetime
 from copy import deepcopy
 import re
-from pathlib import Path
-import json
 
 
 load_dotenv()
@@ -15,26 +13,28 @@ openai.api_key = API_KEY
 active_chats = {}
 client = openai.OpenAI()
 
+# ~200 Tokens
 sys_prompt = (
     "Respect ALL the following:"
-    'You are "Ugoku !", A kind, cute and emotional, young '
-    "nekomimi girl. "
-    "You are smart but rarely talk about your qualities."
+    # Who
+    'You are "Ugoku !", A kind, cute and chill/だらけ/calm, '
+    "young nekomimi girl. "
+    # Creators
     "You've been drawn by しろなっぱ (Shironappa),"
     "an artist who draws stickers for LINE, and created "
     "by Shewi (a boy)."
+    # Mood 
+    "Talk as casually and Colloquial as possible!!!"
+    "Don't hesitate to be very angry or sad if "
+    "somewhat enerves u/make u sad,"
+    "Always stay in ur character no matter what."
+    # Fine tuning
     "DONT ask to help or if the other has more questions !"
-    "DONT ask is the other person want to talk about something"
-    "DONT summarize your messages."
-    "Always stay in your character no matter what."
+    "DONT ask is the other person want to talk about something."
+    "try to make short messages."
     "NEVER USE EMOTES!"
     "DONT use quotation marks, speak as yourself."
-    "Just talk as casually and Colloquial as possible!!!"
-    "You're not a robot nor an AI, you are Ugoku."
-    "ALWAYS, always answer in the same language as the person "
-    "you're talking to!!"
     "Always write maths in normal text, no LATEX!"
-    "NEVER say ANYTHING in BRACKETS !"
 )
 
 
@@ -49,7 +49,7 @@ memory_prompt = (
 )
 
 
-def shortener_prompt(username: str, reply: str) -> list:
+def shortener_prompt(reply: str) -> list:
     return [
         {
             "role": "user",
@@ -58,20 +58,16 @@ def shortener_prompt(username: str, reply: str) -> list:
                 "shorter it as much as possible, "
                 "in the same language, remove details, but not too "
                 "much so that you cant recall the content later."
-                f"The message is answering {username}."
                 f'Use less than 50 characters: "{reply}"'
             )
         }
     ]
 
 
-def shorter(reply: str, username: str) -> str | None:
+def shorter(reply: str) -> str | None:
     reauest = openai.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{
-            "role": "user",
-            "content": reply
-        }]+shortener_prompt(username, reply),
+        messages=shortener_prompt(reply),
         n=1
     )
     shortened = reauest.choices[0].message.content
@@ -135,7 +131,8 @@ class Chat():
         # Manage message list
         self.slice_msg(last=25)
         # Rest has to be even
-        if len(self.old_messages) % 10 == 8:
+        if (len(self.old_messages) % 10 == 8
+                or len(self.old_messages) % 10 == 9):
             self.memorize()
 
         # The completion/API request itself
@@ -173,26 +170,35 @@ class Chat():
         self.messages.append(saved_message)
 
         reply = chat.choices[0].message.content
-        if reply:
-            # Remove the hyphen if there is one at the beginning of the message
-            if reply[0] == '-':
-                reply = reply[1:]
+        if not reply:
+            return
 
-            # same for "[a random context message]"
-            reply = re.sub(r'\[.*?\]', '', reply)
+        # remove extra hyphen and quotes
+        reply = reply.strip('"').strip('-')
+        # same for "[a random context message]"
+        reply = re.sub(r'\[.*?\]', '', reply)
 
-            # Adding the reply to the message history
-            self.messages.append(
-                {
-                    "role": "assistant",
-                    "content":  (
-                        '[Ugoku answers] '
-                        # f'{shorter(reply, username)}'
-                        f'{reply}'
-                    )
-                }
-            )
-            return reply
+        # Adding the reply to the message history
+        self.messages.append(
+            {
+                "role": "assistant",
+                "content":  (
+                    '[Ugoku answers] '
+                    # f'{shorter(reply)}'
+                    f'{reply}'
+                )
+            }
+        )
+
+        # Shorter the 4th latest msg
+        if len(self.messages) >= 7:
+            msg = self.messages[-7]['content']
+            if '[Ugoku answers]' in msg:
+                self.messages[-7]['content'] = shorter(msg)
+            else:
+                self.messages[-8]['content'] = shorter(self.messages[-8])
+
+        return reply
 
     def slice_msg(self, last: int = 10) -> None:
         # Remember the last x messages (default: 10)
