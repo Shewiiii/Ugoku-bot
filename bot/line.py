@@ -5,8 +5,14 @@ from pathlib import Path
 import shutil
 import logging
 import os
-from apnggif import apnggif
 from bot.exceptions import IncorrectURL
+# kuso module
+try:
+    from apnggif import apnggif
+    apnggif_enabled = True
+except:
+    print('apnggif nof found')
+    apnggif_enabled = False
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +45,28 @@ def get_link(string: str) -> Path:
     )[-1][0]
 
 
+def convert_to_gif(
+    gif: bool,
+    sticker_type: str,
+    sticker_count: int,
+    path: Path | str
+) -> None:
+    if (
+        apnggif_enabled
+        and gif
+        and sticker_type in ['animation-sticker', 'popup-sticker']
+    ):
+        for i in range(sticker_count):
+            file = path / f'{i+1}.png'
+            g_file = path / f'{i+1}.gif'
+            apnggif(
+                png=file,
+                gif=g_file,
+                tlevel=255
+            )
+            os.remove(f'{path}/{i+1}.png')
+
+
 def get_stickerpack(
     link: str | None,
     gif: bool = True
@@ -61,7 +89,7 @@ def get_stickerpack(
 
         # Pack name
         pack_name = raw.find('p', {'data-test': 'sticker-name-title'}).text
-    except: # To precise :gura_sleep:
+    except:  # To precise :gura_sleep:
         raise IncorrectURL
 
     # Remove weird characters
@@ -98,16 +126,12 @@ def get_stickerpack(
             png_file.write(neko_arius)
 
     # Convert apngs to gif if wanted and if there are
-    if gif and sticker_type in ['animation-sticker', 'popup-sticker']:
-        for i in range(sticker_count):
-            file = path / f'{i+1}.png'
-            g_file = path / f'{i+1}.gif'
-            apnggif(
-                png=file,
-                gif=g_file,
-                tlevel=255
-            )
-            os.remove(f'{path}/{i+1}.png')
+    convert_to_gif(
+        gif,
+        sticker_type,
+        sticker_count,
+        path
+    )
 
     # Delete old ARCHIVE if there is
     if os.path.isfile(f'{archive_path}.zip'):
