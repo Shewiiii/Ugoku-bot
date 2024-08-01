@@ -1010,7 +1010,15 @@ if API_KEY:  # api key is given
             image_urls.append(sticker.url)
 
         # Keywords to trigger GPT-4o (instead)
-        if any([word in processed_message for word in ['time', 'solve', 'math', 'write']]):
+        keywords = [
+            'time',
+            'solve',
+            'how',
+            'math',
+            'write',
+            '何時'
+        ]
+        if any([word in processed_message for word in keywords]):
             model = 'gpt-4o'
             logging.info(f'Using gpt-4o, no memory: {processed_message}')
         else:
@@ -1225,5 +1233,4 @@ async def help(ctx: discord.ApplicationContext):
         embed=general,
         view=MyView()
     )
-
 bot.run(DEV_TOKEN)
