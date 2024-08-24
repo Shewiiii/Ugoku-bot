@@ -21,11 +21,11 @@ async def change_settings(
 ) -> None:
     with open(path, 'r') as json_file:
         settings = json.load(json_file)
-
         # Change value
         settings[setting][str(id)] = value
 
-        # Write new data
+    # Write new data
+    with open(path, 'w') as json_file:
         json.dump(settings, json_file)
 
 

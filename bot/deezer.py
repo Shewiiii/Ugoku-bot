@@ -57,7 +57,12 @@ plugins = {
 plugins['spotify'].setup()
 
 # Load account
-dz.login_via_arl(ARL)
+try:
+    dz.login_via_arl(ARL)
+    deezer_enabled = True
+except:
+    deezer_enabled = False
+    print('Deezer features not enabled !!')
 # country = get_account_country()
 
 # Init custom arl

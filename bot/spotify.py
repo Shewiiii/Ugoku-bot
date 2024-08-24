@@ -31,10 +31,11 @@ ogg_path.mkdir(parents=True, exist_ok=True)
 # librespot
 try:
     session = Session.Builder() \
-        .user_pass(SPOTIFY_USERNAME, SPOTIFY_PASSWORD) \
+        .stored_file() \
         .create()
     spotify_enabled = True
-except Session.SpotifyAuthenticationException:
+except Session.SpotifyAuthenticationException as e:
+    print('Spotify features not enabled !', e)
     spotify_enabled = False
 
 # Spotipy

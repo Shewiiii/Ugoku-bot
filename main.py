@@ -12,9 +12,10 @@ from dotenv import load_dotenv
 from typing import Any
 import requests
 from requests.exceptions import ConnectionError, MissingSchema
+from time import time
 
 from bot.line import get_stickerpack
-from bot.deezer import DeezerDownloader
+from bot.deezer import DeezerDownloader, deezer_enabled
 from bot.spotify import Spotify_, spotify_enabled
 from bot.exceptions import *
 from bot.settings import *
@@ -175,6 +176,9 @@ async def songs(
     query: str,
     format: str | None = None,
 ) -> None:
+    if not deezer_enabled:
+        await ctx.respond('Deezer features not enabled.')
+        return
     index = {'FLAC': 0, 'MP3 320': 1, 'MP3 128': 2}
     timer = Timer()
 
@@ -582,6 +586,9 @@ async def play_deezer(
     query: str,
     session: ServerSession
 ) -> None:
+    if not deezer_enabled:
+        await ctx.edit(content='Deezer features not enabled.')
+        return
     # Get urls from query with the Spotify_ wrapper
     urls: list = await spotify.get_track_urls(query)
     if not urls:
@@ -658,7 +665,7 @@ async def play_custom(
     try:
         raw = requests.get(query)
         ext = re.findall(r'\.(\w+)(\?|$)', query)[0][0]
-        path = f'./output/songs/test.{ext}'
+        path = f'./output/songs/{str(time()).replace('.','')}.{ext}'
         with open(path, 'wb') as file:
             file.write(raw.content)
     except (MissingSchema, ConnectionError):
