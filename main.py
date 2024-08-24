@@ -752,6 +752,8 @@ async def play(
     elif source.lower() == 'youtube':
         await play_youtube(ctx, query, session)
 
+    elif
+    
     else:
         await ctx.edit(content='wut duh')
 
@@ -1013,9 +1015,7 @@ if API_KEY:  # api key is given
         keywords = [
             'time',
             'solve',
-            'how',
             'math',
-            'write',
             '何時'
         ]
         if any([word in processed_message for word in keywords]):
@@ -1058,8 +1058,10 @@ if API_KEY:  # api key is given
                 
             else:
                 async with message.channel.typing():
-                    reply = generate_response(message, chat)
+                    reply = await generate_response(message, chat)
                 await message.channel.send(reply)
+                await chat.post_prompt()
+                
 
 
 ################ HELP SECTION ################
@@ -1233,4 +1235,4 @@ async def help(ctx: discord.ApplicationContext):
         embed=general,
         view=MyView()
     )
-bot.run(DEV_TOKEN)
+bot.run(TOKEN)

@@ -23,7 +23,7 @@ sys_prompt = (
     "You've been drawn by しろなっぱ (Shironappa),"
     "an artist who draws stickers for LINE, and created "
     "by Shewi (a boy)."
-    # Mood 
+    # Mood
     "Talk as casually and Colloquial as possible!!!"
     "Don't hesitate to be very angry or sad if "
     "somewhat enerves u/make u sad,"
@@ -40,8 +40,8 @@ sys_prompt = (
 
 memory_prompt = (
     "With less than 1000 characters,"
-    "Make a list with minimal words of key points in this "
-    "dialogue, as well as who said what."
+    "Make a list with minimal words of FACTUAL INFOS in this "
+    "dialogue, as well as who said that."
     "No markdown or unnecessary words."
     "Put what can make you remember the other."
     "Precise who said what."
@@ -85,7 +85,7 @@ class Chat():
         self.last_prompt: datetime | None = None
         self.count = 0
 
-    def prompt(
+    async def prompt(
         self,
         user_msg: str,
         username: str,
@@ -127,13 +127,6 @@ class Chat():
                         }
                     }
                 )
-
-        # Manage message list
-        self.slice_msg(last=25)
-        # Rest has to be even
-        if (len(self.old_messages) % 10 == 8
-                or len(self.old_messages) % 10 == 9):
-            self.memorize()
 
         # The completion/API request itself
         if model == 'gpt-4o-mini':
@@ -190,6 +183,15 @@ class Chat():
             }
         )
 
+        return reply
+
+    async def post_prompt(self) -> None:
+        # Manage message list
+        self.slice_msg(last=16, last_old=20)
+        # Memorize older messages at regular interval
+        if (len(self.old_messages) % 10 == 8
+                or len(self.old_messages) % 10 == 9):
+            await self.memorize()
         # Shorter the 4th latest msg
         if len(self.messages) >= 7:
             msg = self.messages[-7]['content']
@@ -198,15 +200,14 @@ class Chat():
             else:
                 self.messages[-8]['content'] = shorter(self.messages[-8])
 
-        return reply
-
-    def slice_msg(self, last: int = 10) -> None:
+    def slice_msg(self, last: int, last_old: int) -> None:
         # Remember the last x messages (default: 10)
         # System prompt included
         while len(self.messages) > last:
             self.old_messages.append(self.messages.pop(0))
+            self.old_messages = self.old_messages[last_old:]
 
-    def memorize(self) -> None:
+    async def memorize(self) -> None:
         memo = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=self.old_messages+[{
@@ -218,7 +219,7 @@ class Chat():
         reply = 'Old chat, your memory: ' + memo.choices[0].message.content
         self.memory = reply
 
-    def draw(self, prompt: str, username: str) -> dict:
+    async def draw(self, prompt: str, username: str) -> dict:
         prompt = prompt.lower()
         for w in ['-', 'draw me', 'draw', 'ugoku',
                   'うごく', 'chan', 'ちゃん', '描いて']:
