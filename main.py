@@ -10,6 +10,8 @@ import logging
 import os
 from dotenv import load_dotenv
 from typing import Any
+import requests
+from requests.exceptions import ConnectionError, MissingSchema
 
 from bot.line import get_stickerpack
 from bot.deezer import DeezerDownloader
@@ -19,7 +21,6 @@ from bot.settings import *
 from bot.arls import *
 from bot.timer import Timer
 from bot.search import get_song_url, is_url, A_ISO3166
-
 
 load_dotenv()
 
@@ -649,6 +650,31 @@ async def play_spotify(
             await session.start_playing(ctx)
 
 
+async def play_custom(
+    ctx: discord.ApplicationContext,
+    query: str,
+    session: ServerSession
+) -> None:
+    try:
+        raw = requests.get(query)
+        ext = re.findall(r'\.(\w+)(\?|$)', query)[0][0]
+        path = f'./output/songs/test.{ext}'
+        with open(path, 'wb') as file:
+            file.write(raw.content)
+    except (MissingSchema, ConnectionError):
+        await ctx.respond('No audio found !')
+
+    info_dict = {
+        'display_name': 'Custom track',
+        'source': path,
+        'url': query
+    }
+    
+    await session.add_to_queue(ctx, info_dict, source='custom')
+    if not session.voice_client.is_playing() and len(session.queue) <= 1:
+        await session.start_playing(ctx)
+
+
 # Still mainly from
 # https://gist.github.com/aliencaocao/83690711ef4b6cec600f9a0d81f710e5
 # For Ika and Laser xD
@@ -712,7 +738,7 @@ server_sessions: dict[ServerSession] = {}
     type=discord.SlashCommandOptionType.string,
     description='Source of the song.',
     autocomplete=discord.utils.basic_autocomplete(
-        ['Deezer', 'Spotify', 'Youtube']),
+        ['Deezer', 'Spotify', 'Youtube', 'Custom']),
 )
 async def play(
     ctx: discord.ApplicationContext,
@@ -752,7 +778,8 @@ async def play(
     elif source.lower() == 'youtube':
         await play_youtube(ctx, query, session)
 
-    elif
+    elif source.lower() == 'custom':
+        await play_custom(ctx, query, session)
     
     else:
         await ctx.edit(content='wut duh')
@@ -1235,4 +1262,4 @@ async def help(ctx: discord.ApplicationContext):
         embed=general,
         view=MyView()
     )
-bot.run(TOKEN)
+bot.run(DEV_TOKEN)
