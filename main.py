@@ -665,19 +665,24 @@ async def play_custom(
     try:
         raw = requests.get(query)
         ext = re.findall(r'\.(\w+)(\?|$)', query)[0][0]
-        path = f'./output/songs/{str(time()).replace('.','')}.{ext}'
+        path = f"./output/songs/{str(time()).replace('.', '')}.{ext}"
         with open(path, 'wb') as file:
             file.write(raw.content)
     except (MissingSchema, ConnectionError):
         await ctx.respond('No audio found !')
 
+    filename_search = re.findall(r'(?:.+\/)([^#?]+)', query)
+    if filename_search:
+        display_name = filename_search[0]
+    else:
+        display_name = 'Custom track'
     info_dict = {
-        'display_name': 'Custom track',
+        'display_name': display_name,
         'source': path,
         'url': query
     }
-    
-    await session.add_to_queue(ctx, info_dict, source='custom')
+
+    await session.add_to_queue(ctx, info_dict, source='Custom')
     if not session.voice_client.is_playing() and len(session.queue) <= 1:
         await session.start_playing(ctx)
 
@@ -787,7 +792,7 @@ async def play(
 
     elif source.lower() == 'custom':
         await play_custom(ctx, query, session)
-    
+
     else:
         await ctx.edit(content='wut duh')
 
@@ -1079,23 +1084,22 @@ if API_KEY:  # api key is given
             chat: Chat = active_chats[message.guild.id]
 
             lowered_message = message.content.lower()
-            
+
             # if '-draw' in lowered_message:
             #     results = chat.draw(
             #         message.content, message.author.display_name)
             #     await message.channel.send(results['image_url'])
             #     await message.channel.send(results['reply'])
-                
+
             # elif '-neko' in lowered_message:
             if '-neko' in lowered_message:
                 await message.channel.send('Arius')
-                
+
             else:
                 async with message.channel.typing():
                     reply = await generate_response(message, chat)
                 await message.channel.send(reply)
                 await chat.post_prompt()
-                
 
 
 ################ HELP SECTION ################
