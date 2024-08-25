@@ -13,6 +13,8 @@ from typing import Any
 import requests
 from requests.exceptions import ConnectionError, MissingSchema
 from time import time
+from urllib.parse import unquote
+
 
 from bot.line import get_stickerpack
 from bot.deezer import DeezerDownloader, deezer_enabled
@@ -673,7 +675,7 @@ async def play_custom(
 
     filename_search = re.findall(r'(?:.+\/)([^#?]+)', query)
     if filename_search:
-        display_name = filename_search[0]
+        display_name = unquote(filename_search[0])
     else:
         display_name = 'Custom track'
     info_dict = {
