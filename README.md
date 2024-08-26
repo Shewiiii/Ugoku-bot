@@ -1,4 +1,6 @@
+**This repo is discontinued, Im [making a new version of Ugoku](https://github.com/Shewiiii/Ugoku-v2), much more lightweight and completely refactored.**
 # Ugoku ! bot
+
 My first discord bot !
 
 ## Features
